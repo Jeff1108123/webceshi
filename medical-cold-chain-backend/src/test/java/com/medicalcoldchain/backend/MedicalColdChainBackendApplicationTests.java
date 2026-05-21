@@ -17,11 +17,13 @@ import com.medicalcoldchain.backend.repository.UserAccountRepository;
 import com.medicalcoldchain.backend.service.AuthService;
 import com.medicalcoldchain.backend.service.BorrowLimitService;
 import com.medicalcoldchain.backend.service.DeviceService;
+import com.medicalcoldchain.backend.service.DeviceSimulationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -43,6 +45,9 @@ class MedicalColdChainBackendApplicationTests {
 
     @Autowired
     private UserAccountRepository userAccountRepository;
+
+    @Autowired
+    private DeviceSimulationService deviceSimulationService;
 
     @Test
     void newUserShouldContinueRegistrationAfterConfirmation() {
@@ -246,6 +251,23 @@ class MedicalColdChainBackendApplicationTests {
         deviceService.applyDevices(dispatcher, applyRequest(1));
 
         assertEquals(2, deviceService.getOverview(dispatcher).getAvailableCount());
+    }
+
+    @Test
+    void simulatedTelemetryShouldChangeSmoothlyBetweenMinutes() {
+        LocalDateTime start = LocalDateTime.of(2026, 5, 21, 0, 0);
+        DeviceSimulationService.SimulatedTelemetry previous = deviceSimulationService.simulateTelemetry("MCC-SMOOTH-001", start);
+
+        for (int minute = 1; minute <= 24 * 60; minute++) {
+            DeviceSimulationService.SimulatedTelemetry current = deviceSimulationService
+                    .simulateTelemetry("MCC-SMOOTH-001", start.plusMinutes(minute));
+
+            assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.8,
+                    "temperature jumped at minute " + minute);
+            assertTrue(Math.abs(current.light() - previous.light()) <= 1.2,
+                    "light jumped at minute " + minute);
+            previous = current;
+        }
     }
 
     private UserAccount createBorrowLimitTestUser(String prefix, String name) {

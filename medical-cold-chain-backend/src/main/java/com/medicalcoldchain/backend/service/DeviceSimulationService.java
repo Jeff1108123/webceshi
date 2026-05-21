@@ -26,19 +26,16 @@ public class DeviceSimulationService {
 
         double temperature = 4.8
                 + Math.sin(phase * 0.85) * 2.1
-                + Math.cos(phase * 0.42 + seed % 7) * 0.7;
-        if ((recordedAt.getHour() + seed) % 12 == 0 && recordedAt.getMinute() >= 35) {
-            temperature += 3.8;
-        }
+                + Math.cos(phase * 0.42 + seed % 7) * 0.7
+                + smoothCyclicPulse((recordedAt.getHour() + seed) % 12, 0, 12, 1.8) * 2.4;
 
         double humidity = 58
                 + Math.sin(phase * 0.55 + 1.5) * 9.2
                 + Math.cos(phase * 0.21 + seed % 9) * 2.3;
 
-        double light = 5.5 + Math.max(0, Math.sin(phase * 1.9 + seed % 5)) * 4.8;
-        if ((recordedAt.getMinute() + seed) % 50 >= 42) {
-            light += 4.6;
-        }
+        double light = 5.5
+                + Math.max(0, Math.sin(phase * 1.9 + seed % 5)) * 4.8
+                + smoothCyclicPulse((recordedAt.getMinute() + seed) % 50, 45, 50, 7.0) * 3.4;
 
         int batteryLevel = (int) Math.round(clamp(
                 96 - ((minutes % (48 * 60)) / 60.0) * 0.8 - (seed % 8) + Math.sin(phase) * 1.5,
@@ -75,6 +72,12 @@ public class DeviceSimulationService {
 
     private double round(double value) {
         return Math.round(value * 100.0) / 100.0;
+    }
+
+    private double smoothCyclicPulse(double value, double center, double period, double width) {
+        double directDistance = Math.abs(value - center);
+        double distance = Math.min(directDistance, period - directDistance);
+        return Math.exp(-(distance * distance) / (2 * width * width));
     }
 
     private double clamp(double value, double min, double max) {
