@@ -1,7 +1,7 @@
 <template>
   <AppShell title="设备管理">
     <section class="summary">
-      <div><span>可创建设备</span><strong>不限</strong></div>
+      <div><span>可借设备</span><strong>{{ deviceStore.overview.availableCount }}</strong></div>
       <div><span>系统在用</span><strong>{{ deviceStore.overview.inUseCount }}</strong></div>
       <div><span>我的设备</span><strong>{{ deviceStore.overview.myDeviceCount }}</strong></div>
       <div><span>告警</span><strong>{{ deviceStore.overview.alarmCount }}</strong></div>

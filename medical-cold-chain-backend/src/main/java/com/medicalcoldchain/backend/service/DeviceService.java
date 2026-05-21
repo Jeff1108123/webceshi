@@ -67,7 +67,7 @@ public class DeviceService {
         }
 
         return DeviceOverviewResponse.builder()
-                .availableCount(0)
+                .availableCount(Math.max(borrowLimitService.getEffectiveLimit(user) - myDevices.size(), 0))
                 .inUseCount(transportDeviceRepository.countByStatus(DeviceStatus.IN_USE))
                 .myDeviceCount(myDevices.size())
                 .alarmCount(alarmCount)
