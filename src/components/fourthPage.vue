@@ -23,10 +23,16 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in records" :key="item.deviceId" :class="{ alarm: item.telemetry && item.telemetry.alarm }">
+            <tr
+              v-for="item in records"
+              :key="item.deviceId"
+              :class="{ alarm: item.telemetry && item.telemetry.alarm }"
+              :aria-label="`${item.deviceName}状态：${item.telemetry && item.telemetry.alarm ? '告警' : '正常'}`"
+            >
               <td>
                 <strong>{{ item.deviceName }}</strong>
                 <span>{{ item.deviceCode }}</span>
+                <span class="alarm-status">状态：{{ item.telemetry && item.telemetry.alarm ? '告警' : '正常' }}</span>
               </td>
               <td>{{ renderMetric(item.telemetry, 'temperature', '°C') }}</td>
               <td>{{ renderMetric(item.telemetry, 'humidity', '%') }}</td>
@@ -101,48 +107,127 @@ export default {
 
 <style scoped>
 .panel {
-  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.78));
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.34), inset 0 1px 0 rgba(148, 163, 184, 0.1);
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.15), transparent 32%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+}
+
+.toolbar,
+.table-wrap,
+.empty-state {
+  position: relative;
+  z-index: 1;
 }
 
 .toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
-  color: var(--text-muted);
+  margin-bottom: 16px;
+  color: rgba(191, 219, 254, 0.78);
+}
+
+.toolbar span {
+  padding: 9px 12px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.3);
 }
 
 button {
   height: 36px;
-  padding: 0 12px;
-  border: none;
+  padding: 0 13px;
+  border: 1px solid rgba(34, 211, 238, 0.36);
   border-radius: 10px;
-  color: var(--primary-dark);
-  background: rgba(15, 123, 255, 0.08);
+  color: #e0f2fe;
+  background: rgba(8, 145, 178, 0.18);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.12);
   cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.8);
+  background: rgba(14, 165, 233, 0.28);
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.24);
+}
+
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .table-wrap {
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.34);
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
+}
+
+.table-wrap::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-wrap::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.82);
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.42);
 }
 
 table {
   width: 100%;
   min-width: 980px;
   border-collapse: collapse;
+  color: #dbeafe;
 }
 
 th,
 td {
-  padding: 12px;
+  padding: 13px 14px;
   text-align: left;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  vertical-align: middle;
 }
 
 th {
-  color: var(--text-muted);
-  font-size: 13px;
-  background: rgba(248, 250, 252, 0.9);
+  position: sticky;
+  top: 0;
+  color: #67e8f9;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(8, 47, 73, 0.92);
+}
+
+tbody tr {
+  transition: background 0.2s ease;
+}
+
+tbody tr:hover {
+  background: rgba(14, 165, 233, 0.08);
 }
 
 td strong,
@@ -150,23 +235,73 @@ td span {
   display: block;
 }
 
+td strong {
+  color: #f8fafc;
+}
+
 td span {
   margin-top: 4px;
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.62);
+}
+
+.alarm-status {
+  display: inline-block;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 999px;
+  color: #e0f2fe;
+  background: rgba(15, 23, 42, 0.48);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 tr.alarm {
-  background: rgba(214, 69, 69, 0.06);
+  background: linear-gradient(90deg, rgba(127, 29, 29, 0.42), rgba(251, 146, 60, 0.1));
+}
+
+tr.alarm td {
+  border-bottom-color: rgba(248, 113, 113, 0.24);
+}
+
+tr.alarm td:first-child {
+  box-shadow: inset 3px 0 0 rgba(248, 113, 113, 0.9);
 }
 
 .actions {
   display: flex;
+  flex-wrap: nowrap;
   gap: 6px;
+  min-width: 168px;
+}
+
+.actions button {
+  height: 32px;
+  padding: 0 10px;
+  color: #cffafe;
+  background: rgba(14, 116, 144, 0.22);
 }
 
 .empty-state {
-  padding: 30px 0;
+  padding: 34px 0;
   text-align: center;
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.68);
+}
+
+@media (max-width: 760px) {
+  .panel {
+    padding: 18px;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar span,
+  .toolbar button {
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 </style>

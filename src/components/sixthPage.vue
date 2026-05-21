@@ -280,15 +280,40 @@ export default {
 
 <style scoped>
 .panel {
-  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.78));
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.34), inset 0 1px 0 rgba(148, 163, 184, 0.1);
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.16), transparent 32%),
+    radial-gradient(circle at 8% 88%, rgba(14, 165, 233, 0.12), transparent 30%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+}
+
+.toolbar,
+.empty-state,
+.history-layout {
+  position: relative;
+  z-index: 1;
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 18px;
 }
 
 .toolbar-group {
@@ -302,42 +327,71 @@ export default {
   justify-content: space-between;
   flex: 1;
   min-width: 280px;
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.72);
 }
 
 .status-copy {
   display: grid;
   gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.3);
 }
 
 .status-copy strong {
   font-size: 14px;
-  color: var(--text-main, #0f172a);
+  color: #e0f2fe;
 }
 
 .status-copy small {
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.62);
 }
 
 select,
 button {
-  height: 40px;
-  border-radius: 10px;
+  height: 42px;
+  border-radius: 12px;
+  font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
 select {
   min-width: 180px;
-  padding: 0 12px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #fff;
+  padding: 0 14px;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.84);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.38);
+  cursor: pointer;
+}
+
+select:focus {
+  border-color: rgba(34, 211, 238, 0.82);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.14), 0 0 24px rgba(34, 211, 238, 0.2);
 }
 
 button {
-  padding: 0 14px;
-  border: none;
-  color: var(--primary-dark);
-  background: rgba(15, 123, 255, 0.08);
+  padding: 0 16px;
+  border: 1px solid rgba(34, 211, 238, 0.42);
+  color: #ecfeff;
+  background: rgba(8, 145, 178, 0.2);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.14);
   cursor: pointer;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.82);
+  background: rgba(14, 165, 233, 0.3);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.28);
+}
+
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .history-layout {
@@ -354,26 +408,43 @@ button {
 .summary-card,
 .snapshot-card,
 .alarm-panel {
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(34, 211, 238, 0.16);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(180deg, rgba(8, 47, 73, 0.44), rgba(2, 6, 23, 0.5));
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08), 0 14px 30px rgba(2, 6, 23, 0.22);
 }
 
 .summary-card {
+  position: relative;
+  overflow: hidden;
   padding: 18px;
   display: grid;
   gap: 10px;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.summary-card::after {
+  content: '';
+  position: absolute;
+  right: -24px;
+  top: -28px;
+  width: 82px;
+  height: 82px;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.12);
+  filter: blur(2px);
 }
 
 .summary-card:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  border-color: rgba(34, 211, 238, 0.36);
 }
 
 .summary-card.active {
-  border-color: rgba(15, 123, 255, 0.35);
-  box-shadow: 0 10px 30px rgba(15, 123, 255, 0.08);
+  border-color: rgba(34, 211, 238, 0.88);
+  background: linear-gradient(180deg, rgba(14, 116, 144, 0.52), rgba(2, 6, 23, 0.55));
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.16), 0 0 30px rgba(34, 211, 238, 0.24), inset 0 1px 0 rgba(207, 250, 254, 0.12);
 }
 
 .summary-card span,
@@ -381,12 +452,27 @@ button {
 .snapshot-card span,
 .alarm-panel span,
 .alarm-panel small {
-  color: var(--text-muted);
+  position: relative;
+  z-index: 1;
+  color: rgba(191, 219, 254, 0.68);
+}
+
+.summary-card span,
+.snapshot-card span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .summary-card strong,
 .snapshot-card strong {
+  position: relative;
+  z-index: 1;
+  color: #67e8f9;
   font-size: 24px;
+  line-height: 1.12;
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.26);
 }
 
 .snapshot-card {
@@ -396,14 +482,11 @@ button {
   gap: 14px;
 }
 
-.snapshot-card > div,
-.summary-card {
-  background: rgba(248, 250, 252, 0.65);
-  border-radius: 14px;
-}
-
 .snapshot-card > div {
   padding: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.46);
   display: grid;
   gap: 8px;
 }
@@ -411,6 +494,44 @@ button {
 .trend-list {
   display: grid;
   gap: 12px;
+}
+
+.trend-list ::v-deep .combined-trend-card {
+  border-color: rgba(34, 211, 238, 0.16);
+  background: linear-gradient(180deg, rgba(8, 47, 73, 0.44), rgba(2, 6, 23, 0.54));
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08), 0 14px 30px rgba(2, 6, 23, 0.24);
+}
+
+.trend-list ::v-deep .combined-head h4,
+.trend-list ::v-deep .stat-row strong {
+  color: #e0f2fe;
+}
+
+.trend-list ::v-deep .combined-head p,
+.trend-list ::v-deep .legend,
+.trend-list ::v-deep .stat-row,
+.trend-list ::v-deep .stat-row small {
+  color: rgba(191, 219, 254, 0.68);
+}
+
+.trend-list ::v-deep .legend span,
+.trend-list ::v-deep .stat-row {
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.trend-list ::v-deep .chart-shell {
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.trend-list ::v-deep .grid-line {
+  stroke: rgba(34, 211, 238, 0.14);
+}
+
+.trend-list ::v-deep .axis-text {
+  fill: rgba(191, 219, 254, 0.62);
 }
 
 .alarm-panel {
@@ -426,6 +547,16 @@ button {
 
 .panel-header h3 {
   margin: 0;
+  color: #e0f2fe;
+  font-size: 20px;
+}
+
+.panel-header span {
+  padding: 4px 10px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 999px;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.22);
 }
 
 .alarm-list {
@@ -438,20 +569,33 @@ button {
 
 .alarm-list li {
   padding: 14px 16px;
+  border: 1px solid rgba(248, 113, 113, 0.26);
   border-radius: 14px;
-  background: rgba(214, 69, 69, 0.06);
-  border: 1px solid rgba(214, 69, 69, 0.08);
+  background: linear-gradient(90deg, rgba(127, 29, 29, 0.48), rgba(251, 146, 60, 0.1));
+  box-shadow: inset 3px 0 0 rgba(248, 113, 113, 0.88), 0 10px 24px rgba(127, 29, 29, 0.16);
   display: grid;
   gap: 4px;
 }
 
+.alarm-list strong {
+  color: #fee2e2;
+}
+
+.alarm-list span {
+  color: #fecaca;
+}
+
+.alarm-list small {
+  color: rgba(254, 202, 202, 0.72);
+}
+
 .alarm-empty,
 .empty-state {
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.68);
 }
 
 .empty-state {
-  padding: 30px 0;
+  padding: 34px 0;
   text-align: center;
 }
 
@@ -463,6 +607,10 @@ button {
 }
 
 @media (max-width: 560px) {
+  .panel {
+    padding: 18px;
+  }
+
   .toolbar,
   .toolbar-group,
   .toolbar-meta {

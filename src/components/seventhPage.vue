@@ -125,12 +125,13 @@ export default {
         offset: new window.BMap.Size(14, -20)
       })
       this.label.setStyle({
-        color: '#fff',
-        backgroundColor: '#0f7bff',
-        borderColor: '#0f7bff',
+        color: '#e0f2fe',
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        borderColor: '#22d3ee',
         borderRadius: '10px',
         padding: '5px 8px',
-        fontSize: '12px'
+        fontSize: '12px',
+        boxShadow: '0 0 16px rgba(34, 211, 238, 0.32)'
       })
       this.marker.setLabel(this.label)
     }
@@ -140,71 +141,171 @@ export default {
 
 <style scoped>
 .panel {
-  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.78));
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.34), inset 0 1px 0 rgba(148, 163, 184, 0.1);
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 34%),
+    radial-gradient(circle at 86% 86%, rgba(14, 165, 233, 0.12), transparent 30%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.06) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+}
+
+.toolbar,
+.empty-state,
+.map-container,
+.location-info {
+  position: relative;
+  z-index: 1;
 }
 
 .toolbar {
   display: flex;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 select,
 button {
-  height: 40px;
-  border-radius: 10px;
+  height: 42px;
+  border-radius: 12px;
+  font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
 select {
   min-width: 240px;
-  padding: 0 12px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #fff;
+  padding: 0 14px;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.84);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.38);
+  cursor: pointer;
+}
+
+select:focus {
+  border-color: rgba(34, 211, 238, 0.82);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.14), 0 0 24px rgba(34, 211, 238, 0.2);
 }
 
 button {
-  padding: 0 14px;
-  border: none;
-  color: var(--primary-dark);
-  background: rgba(15, 123, 255, 0.08);
+  padding: 0 16px;
+  border: 1px solid rgba(34, 211, 238, 0.42);
+  color: #ecfeff;
+  background: rgba(8, 145, 178, 0.2);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.14);
   cursor: pointer;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.82);
+  background: rgba(14, 165, 233, 0.3);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.28);
+}
+
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .map-container {
   width: 100%;
   height: 520px;
   overflow: hidden;
-  border-radius: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.55);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.08), 0 0 34px rgba(34, 211, 238, 0.2), inset 0 0 30px rgba(2, 6, 23, 0.42);
+}
+
+.map-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px rgba(207, 250, 254, 0.08), inset 0 0 40px rgba(2, 6, 23, 0.24);
 }
 
 .location-info {
-  margin-top: 12px;
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(248, 250, 252, 0.95);
+  margin: -76px 18px 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.82);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.34), 0 0 24px rgba(34, 211, 238, 0.16);
+  backdrop-filter: blur(10px);
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(80px, 0.3fr) minmax(220px, 1fr) auto;
+  gap: 8px 14px;
+  align-items: center;
 }
 
-.location-info span,
+.location-info span {
+  color: #67e8f9;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.location-info strong {
+  color: #e0f2fe;
+  line-height: 1.35;
+}
+
 .location-info small {
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.68);
+  white-space: nowrap;
 }
 
 .empty-state {
-  padding: 30px 0;
+  padding: 34px 0;
   text-align: center;
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.68);
+}
+
+@media (max-width: 760px) {
+  .location-info {
+    grid-template-columns: 1fr;
+    margin: 12px 0 0;
+  }
+
+  .location-info small {
+    white-space: normal;
+  }
 }
 
 @media (max-width: 560px) {
+  .panel {
+    padding: 18px;
+  }
+
   .toolbar {
     flex-direction: column;
   }
 
+  select,
+  button {
+    width: 100%;
+  }
+
   select {
     min-width: 0;
-    width: 100%;
   }
 
   .map-container {

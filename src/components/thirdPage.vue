@@ -2,7 +2,7 @@
   <AppShell title="阈值设置">
     <section class="page-section panel">
       <div class="toolbar">
-        <select v-if="deviceStore.devices.length" v-model="selectedDeviceId">
+        <select v-if="deviceStore.devices.length" v-model="selectedDeviceId" aria-label="选择设备">
           <option v-for="item in deviceStore.devices" :key="item.id" :value="item.id">
             {{ item.deviceName }} ({{ item.deviceCode }})
           </option>
@@ -121,82 +121,148 @@ export default {
 
 <style scoped>
 .panel {
-  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(15, 23, 42, 0.78));
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.34), inset 0 1px 0 rgba(148, 163, 184, 0.1);
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 34%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+  background-size: auto, 42px 42px, 42px 42px;
+}
+
+.toolbar,
+.form-grid,
+.empty-state {
+  position: relative;
+  z-index: 1;
 }
 
 .toolbar {
   display: flex;
-  gap: 10px;
-  margin-bottom: 18px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
 select,
 button,
 input {
-  height: 42px;
-  border-radius: 10px;
+  height: 44px;
+  border-radius: 12px;
+  font: inherit;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, transform 0.2s ease;
 }
 
 select,
 input {
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #fff;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.82);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.38);
+}
+
+select:focus,
+input:focus {
+  border-color: rgba(34, 211, 238, 0.82);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.14), 0 0 24px rgba(34, 211, 238, 0.2);
 }
 
 select {
-  min-width: 260px;
-  padding: 0 12px;
+  min-width: 300px;
+  padding: 0 14px;
+  cursor: pointer;
 }
 
 button {
-  border: none;
-  padding: 0 16px;
-  color: #fff;
-  background: var(--primary);
+  border: 1px solid rgba(34, 211, 238, 0.46);
+  padding: 0 18px;
+  color: #ecfeff;
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.95), rgba(14, 165, 233, 0.72));
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.18);
   cursor: pointer;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 252, 0.88);
+  box-shadow: 0 0 26px rgba(34, 211, 238, 0.32);
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 label {
   display: grid;
-  gap: 8px;
-  font-weight: 600;
+  gap: 9px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  color: #bae6fd;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(2, 6, 23, 0.34);
 }
 
 input {
-  padding: 0 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 13px;
 }
 
 .empty-state {
-  padding: 30px 0;
+  padding: 34px 0;
   text-align: center;
-  color: var(--text-muted);
+  color: rgba(191, 219, 254, 0.68);
 }
 
 button:disabled {
-  opacity: 0.7;
+  opacity: 0.48;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 980px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
+  .panel {
+    padding: 18px;
+  }
+
   .toolbar,
   .form-grid {
     grid-template-columns: 1fr;
     flex-direction: column;
+    align-items: stretch;
   }
 
   .form-grid {
     display: grid;
   }
 
-  select {
-    min-width: 0;
+  select,
+  button {
     width: 100%;
+    min-width: 0;
   }
 }
 </style>

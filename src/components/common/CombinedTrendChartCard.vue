@@ -13,7 +13,15 @@
     </div>
 
     <div v-if="hasPoints" class="chart-shell">
-      <svg class="trend-svg" viewBox="0 0 720 300" preserveAspectRatio="none">
+      <svg
+        class="trend-svg"
+        viewBox="0 0 720 300"
+        preserveAspectRatio="none"
+        role="img"
+        :aria-label="chartAriaLabel"
+      >
+        <title>{{ chartTitle }}</title>
+        <desc>{{ chartDescription }}</desc>
         <line
           v-for="gridLine in gridLines"
           :key="gridLine.key"
@@ -108,7 +116,7 @@ export default {
           key: 'temperature',
           label: '温度',
           unit: '°C',
-          color: '#0f7bff',
+          color: '#2f8cff',
           values: this.temperatureValues,
           thresholdMin: this.threshold.tempMin,
           thresholdMax: this.threshold.tempMax
@@ -117,7 +125,7 @@ export default {
           key: 'humidity',
           label: '湿度',
           unit: '%',
-          color: '#1f9d66',
+          color: '#21d07a',
           values: this.humidityValues,
           thresholdMin: this.threshold.humidityMin,
           thresholdMax: this.threshold.humidityMax
@@ -126,7 +134,7 @@ export default {
           key: 'light',
           label: '光照',
           unit: 'Lux',
-          color: '#d97706',
+          color: '#f7c948',
           values: this.lightValues,
           thresholdMin: null,
           thresholdMax: this.threshold.lightMax
@@ -193,6 +201,20 @@ export default {
         label: this.labels[labelIndex] || '',
         anchor: labelIndex === 0 ? 'start' : (labelIndex === lastIndex ? 'end' : 'middle')
       }))
+    },
+    chartTitle() {
+      return '综合趋势图'
+    },
+    chartDescription() {
+      const firstLabel = this.labels[0] || '首个记录'
+      const lastLabel = this.labels[this.labels.length - 1] || '最新记录'
+      const seriesSummary = this.chartSeries
+        .map(series => `${series.label}最新${this.formatMetric(series.latest, series.unit)}，最低${this.formatMetric(series.min, series.unit)}，最高${this.formatMetric(series.max, series.unit)}`)
+        .join('；')
+      return `${this.chartTitle}，展示温度、湿度、光照三项指标，时间范围从${firstLabel}到${lastLabel}。${seriesSummary}`
+    },
+    chartAriaLabel() {
+      return this.chartDescription
     }
   },
   methods: {
@@ -261,11 +283,15 @@ export default {
 <style scoped>
 .combined-trend-card {
   padding: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--line);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.92);
+  background:
+    linear-gradient(145deg, rgba(14, 32, 59, 0.94), rgba(7, 18, 36, 0.88)),
+    var(--surface);
+  box-shadow: var(--card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   display: grid;
   gap: 16px;
+  backdrop-filter: blur(16px);
 }
 
 .combined-head {
@@ -277,6 +303,7 @@ export default {
 
 .combined-head h4 {
   margin: 0 0 8px;
+  color: var(--text-strong);
   font-size: 20px;
 }
 
@@ -290,23 +317,26 @@ export default {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  color: var(--text-muted);
+  color: var(--text-main);
 }
 
 .legend span {
   padding: 8px 10px;
+  border: 1px solid rgba(113, 206, 255, 0.16);
   border-radius: 999px;
-  background: rgba(248, 250, 252, 0.9);
+  background: rgba(8, 22, 43, 0.72);
   display: inline-flex;
   gap: 6px;
   align-items: center;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .legend i {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  box-shadow: 0 0 12px currentColor;
 }
 
 .chart-shell {
@@ -321,7 +351,7 @@ export default {
 }
 
 .grid-line {
-  stroke: rgba(148, 163, 184, 0.18);
+  stroke: rgba(113, 206, 255, 0.14);
   stroke-width: 1;
 }
 
@@ -330,10 +360,11 @@ export default {
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.18));
 }
 
 .axis-text {
-  fill: #64748b;
+  fill: #8aa6bf;
   font-size: 12px;
 }
 
@@ -345,11 +376,13 @@ export default {
 
 .stat-row {
   padding: 12px;
+  border: 1px solid rgba(113, 206, 255, 0.16);
   border-radius: 14px;
-  background: rgba(248, 250, 252, 0.86);
+  background: rgba(8, 22, 43, 0.72);
   display: grid;
   gap: 6px;
   color: var(--text-muted);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .stat-row strong {

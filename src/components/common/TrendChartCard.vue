@@ -22,7 +22,15 @@
     </div>
 
     <div v-if="points.length" class="chart-shell">
-      <svg class="trend-svg" viewBox="0 0 720 260" preserveAspectRatio="none">
+      <svg
+        class="trend-svg"
+        viewBox="0 0 720 260"
+        preserveAspectRatio="none"
+        role="img"
+        :aria-label="chartAriaLabel"
+      >
+        <title>{{ chartTitle }}</title>
+        <desc>{{ chartDescription }}</desc>
         <g>
           <line
             v-for="gridLine in gridLines"
@@ -207,14 +215,14 @@ export default {
         lines.push({
           key: 'min',
           value: this.thresholdMin,
-          color: 'rgba(15, 123, 255, 0.38)'
+          color: '#67e8f9'
         })
       }
       if (Number.isFinite(this.thresholdMax)) {
         lines.push({
           key: 'max',
           value: this.thresholdMax,
-          color: 'rgba(214, 69, 69, 0.42)'
+          color: 'rgba(255, 93, 108, 0.7)'
         })
       }
 
@@ -259,6 +267,18 @@ export default {
         return `参考阈值 ≤ ${this.thresholdMax} ${this.unit}`
       }
       return '暂无阈值参考'
+    },
+    chartTitle() {
+      return `${this.title || '指标'}趋势图`
+    },
+    chartDescription() {
+      const firstPoint = this.points[0]
+      const lastPoint = this.points[this.points.length - 1]
+      const rangeText = firstPoint && lastPoint ? `，时间范围从${firstPoint.label || '首个记录'}到${lastPoint.label || '最新记录'}` : ''
+      return `${this.chartTitle}${rangeText}，最新值${this.formatMetric(this.latestValue)}，最低值${this.formatMetric(this.minValue)}，最高值${this.formatMetric(this.maxValue)}。${this.thresholdText}`
+    },
+    chartAriaLabel() {
+      return this.chartDescription
     }
   },
   methods: {
@@ -274,10 +294,14 @@ export default {
 .trend-card {
   padding: 20px;
   border-radius: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(145deg, rgba(14, 32, 59, 0.94), rgba(7, 18, 36, 0.88)),
+    var(--surface);
+  box-shadow: var(--card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   display: grid;
   gap: 16px;
+  backdrop-filter: blur(16px);
 }
 
 .trend-head {
@@ -293,6 +317,7 @@ export default {
 }
 
 .trend-head h4 {
+  color: var(--text-strong);
   font-size: 20px;
   margin: 0;
 }
@@ -316,11 +341,13 @@ export default {
 
 .stat-pill {
   padding: 10px 12px;
+  border: 1px solid rgba(113, 206, 255, 0.16);
   border-radius: 12px;
-  background: rgba(248, 250, 252, 0.9);
+  background: rgba(8, 22, 43, 0.72);
   display: grid;
   gap: 4px;
   text-align: right;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .stat-pill label {
@@ -329,7 +356,7 @@ export default {
 
 .stat-pill strong {
   font-size: 14px;
-  color: #0f172a;
+  color: #e0faff;
 }
 
 .chart-shell {
@@ -344,7 +371,7 @@ export default {
 }
 
 .grid-line {
-  stroke: rgba(148, 163, 184, 0.18);
+  stroke: rgba(113, 206, 255, 0.14);
   stroke-width: 1;
 }
 
@@ -358,10 +385,11 @@ export default {
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.18));
 }
 
 .axis-text {
-  fill: #64748b;
+  fill: #8aa6bf;
   font-size: 12px;
 }
 

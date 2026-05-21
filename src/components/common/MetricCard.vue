@@ -51,11 +51,25 @@ export default {
 }
 
 .metric-card.warning {
-  background: linear-gradient(135deg, #d97706, #f59e0b);
+  background: linear-gradient(135deg, #7c3d02, #a85a05);
 }
 
 .metric-card.danger {
-  background: linear-gradient(135deg, #d64545, #f87171);
+  background: linear-gradient(135deg, #7f1d1d, #b91c1c);
+}
+
+.metric-card.warning .label,
+.metric-card.warning .hint,
+.metric-card.danger .label,
+.metric-card.danger .hint {
+  color: #fff7ed;
+  opacity: 1;
+}
+
+.metric-card.warning .value,
+.metric-card.danger .value {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.42);
 }
 
 .label {

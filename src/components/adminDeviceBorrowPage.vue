@@ -4,10 +4,11 @@
       <div class="toolbar">
         <input
           v-model.trim="filters.keyword"
+          aria-label="搜索设备借用记录"
           placeholder="搜索设备 / 借用人 / 手机号"
           @keyup.enter="loadRecords"
         />
-        <select v-model="filters.status" @change="loadRecords">
+        <select v-model="filters.status" aria-label="筛选借用状态" @change="loadRecords">
           <option value="">全部</option>
           <option value="BORROWED">借用中</option>
           <option value="RETURNED">已归还</option>
@@ -86,7 +87,7 @@ function normalizeRecord(raw = {}, index) {
     borrowerPhone: raw.borrowerPhone || raw.userPhone || '',
     borrowTime: raw.borrowTime || raw.borrowedAt || '',
     returnTime: raw.returnTime || raw.returnedAt || '',
-    status: String(raw.status || (raw.returnTime ? 'RETURNED' : 'BORROWED')).toUpperCase()
+    status: String(raw.status || ((raw.returnTime || raw.returnedAt) ? 'RETURNED' : 'BORROWED')).toUpperCase()
   }
 }
 
@@ -166,49 +167,89 @@ input,
 select,
 button {
   height: 40px;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 input,
 select {
   padding: 0 12px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #fff;
+  color: var(--text-main);
+  border: 1px solid var(--line);
+  background: rgba(4, 14, 29, 0.72);
+  outline: 2px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+input::placeholder {
+  color: var(--text-subtle);
+}
+
+input:focus,
+select:focus {
+  background: rgba(8, 22, 43, 0.9);
+  border-color: rgba(34, 211, 238, 0.72);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12), 0 0 22px rgba(34, 211, 238, 0.12);
+}
+
+select option {
+  color: var(--text-main);
+  background: #071224;
 }
 
 button {
-  border: none;
-  color: var(--primary-dark);
-  background: rgba(15, 123, 255, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  color: #e0faff;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.34), rgba(37, 99, 235, 0.24));
+  box-shadow: 0 10px 24px rgba(34, 211, 238, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: rgba(34, 211, 238, 0.62);
+  box-shadow: 0 12px 28px rgba(34, 211, 238, 0.16);
+  transform: translateY(-1px);
 }
 
 .table-wrap {
   overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(5, 15, 31, 0.42);
 }
 
 table {
   width: 100%;
   min-width: 1100px;
   border-collapse: collapse;
+  color: var(--text-main);
 }
 
 th,
 td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(113, 206, 255, 0.14);
+}
+
+tbody tr:hover {
+  background: rgba(21, 55, 93, 0.34);
 }
 
 th {
-  color: var(--text-muted);
+  color: #9ee8ff;
   font-size: 13px;
-  background: rgba(248, 250, 252, 0.9);
+  background: rgba(8, 22, 43, 0.86);
 }
 
 td strong,
 td span {
   display: block;
+}
+
+td strong {
+  color: var(--text-strong);
 }
 
 td span {
@@ -219,19 +260,25 @@ td span {
 .status {
   display: inline-flex;
   padding: 6px 10px;
+  border: 1px solid rgba(247, 201, 72, 0.36);
   border-radius: 999px;
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+  background: rgba(247, 201, 72, 0.12);
+  box-shadow: 0 0 16px rgba(247, 201, 72, 0.08);
 }
 
 .status.returned {
-  color: var(--success);
-  background: rgba(31, 157, 102, 0.12);
+  color: #b6f7d2;
+  border-color: rgba(33, 208, 122, 0.42);
+  background: rgba(33, 208, 122, 0.12);
+  box-shadow: 0 0 16px rgba(33, 208, 122, 0.1);
 }
 
 .danger-action {
-  color: #fff;
-  background: var(--danger);
+  color: #fff7f8;
+  border-color: rgba(255, 93, 108, 0.42);
+  background: linear-gradient(135deg, #d9364d, var(--danger));
+  box-shadow: 0 12px 26px rgba(255, 93, 108, 0.22);
 }
 
 .muted {
@@ -242,6 +289,11 @@ td span {
   padding: 30px 0;
   text-align: center;
   color: var(--text-muted);
+}
+
+button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
 }
 
 @media (max-width: 760px) {

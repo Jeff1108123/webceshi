@@ -8,14 +8,14 @@
       </div>
       <label>
         默认上限
-        <input v-model.number="defaultLimitForm" type="number" min="1" />
+        <input v-model.number="defaultLimitForm" aria-label="全局默认借用上限" type="number" min="1" />
       </label>
       <button class="primary-btn" :disabled="loading" @click="saveDefaultLimit">保存全局上限</button>
     </section>
 
     <section class="page-section panel">
       <div class="toolbar">
-        <input v-model.trim="keyword" placeholder="搜索姓名 / 手机号 / 机构" />
+        <input v-model.trim="keyword" aria-label="搜索姓名、手机号或机构" placeholder="搜索姓名 / 手机号 / 机构" />
         <button :disabled="loading" @click="loadBorrowLimits">刷新</button>
       </div>
 
@@ -50,6 +50,7 @@
                   type="number"
                   min="1"
                   :placeholder="String(defaultLimit || 3)"
+                  :aria-label="`${item.name || item.phone || '用户'}的借用上限`"
                   @input="updateLimitForm(item.userId, $event.target.value)"
                 />
               </td>
@@ -197,14 +198,16 @@ export default {
 
 .eyebrow {
   margin-bottom: 6px;
-  color: var(--primary);
+  color: #67e8f9;
   font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 h2 {
   margin-bottom: 8px;
+  color: var(--text-strong);
   font-size: 20px;
 }
 
@@ -228,53 +231,87 @@ label {
 input,
 button {
   height: 40px;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 input {
   padding: 0 12px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #fff;
+  color: var(--text-main);
+  border: 1px solid var(--line);
+  background: rgba(4, 14, 29, 0.72);
+  outline: 2px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+input::placeholder {
+  color: var(--text-subtle);
+}
+
+input:focus {
+  background: rgba(8, 22, 43, 0.9);
+  border-color: rgba(34, 211, 238, 0.72);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12), 0 0 22px rgba(34, 211, 238, 0.12);
 }
 
 button {
-  border: none;
-  color: var(--primary-dark);
-  background: rgba(15, 123, 255, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  color: #e0faff;
+  font-weight: 700;
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.34), rgba(37, 99, 235, 0.24));
+  box-shadow: 0 10px 24px rgba(34, 211, 238, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: rgba(34, 211, 238, 0.62);
+  box-shadow: 0 12px 28px rgba(34, 211, 238, 0.16);
+  transform: translateY(-1px);
 }
 
 .primary-btn {
-  color: #fff;
-  background: var(--primary);
+  color: #f8fbff;
+  border-color: rgba(34, 211, 238, 0.5);
+  background: linear-gradient(135deg, var(--primary), var(--cyan));
+  box-shadow: 0 12px 26px rgba(47, 140, 255, 0.24), 0 0 18px rgba(34, 211, 238, 0.18);
 }
 
 .ghost-btn {
-  color: var(--text-muted);
-  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-main);
+  border-color: var(--line);
+  background: rgba(10, 27, 50, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .table-wrap {
   overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(5, 15, 31, 0.42);
 }
 
 table {
   width: 100%;
   min-width: 1100px;
   border-collapse: collapse;
+  color: var(--text-main);
 }
 
 th,
 td {
   padding: 12px;
   text-align: left;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(113, 206, 255, 0.14);
+}
+
+tbody tr:hover {
+  background: rgba(21, 55, 93, 0.34);
 }
 
 th {
-  color: var(--text-muted);
+  color: #9ee8ff;
   font-size: 13px;
-  background: rgba(248, 250, 252, 0.9);
+  background: rgba(8, 22, 43, 0.86);
 }
 
 .limit-input {
@@ -293,7 +330,7 @@ th {
 }
 
 button:disabled {
-  opacity: 0.65;
+  opacity: 0.62;
   cursor: not-allowed;
 }
 
