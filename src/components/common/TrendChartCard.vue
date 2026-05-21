@@ -48,9 +48,9 @@
           />
         </g>
 
-        <polyline
+        <path
           class="trend-line"
-          :points="polylinePoints"
+          :d="smoothPath"
           :style="{ stroke: color }"
         />
 
@@ -177,8 +177,19 @@ export default {
         }
       })
     },
-    polylinePoints() {
-      return this.pointCoordinates.map(point => `${point.x},${point.y}`).join(' ')
+    smoothPath() {
+      if (!this.pointCoordinates.length) return ''
+      if (this.pointCoordinates.length === 1) {
+        const point = this.pointCoordinates[0]
+        return `M ${point.x} ${point.y}`
+      }
+
+      return this.pointCoordinates.reduce((path, point, index, points) => {
+        if (index === 0) return `M ${point.x} ${point.y}`
+        const previous = points[index - 1]
+        const controlOffset = (point.x - previous.x) * 0.42
+        return `${path} C ${previous.x + controlOffset} ${previous.y}, ${point.x - controlOffset} ${point.y}, ${point.x} ${point.y}`
+      }, '')
     },
     lastPoint() {
       return this.pointCoordinates[this.pointCoordinates.length - 1] || null

@@ -270,6 +270,18 @@ class MedicalColdChainBackendApplicationTests {
         }
     }
 
+    @Test
+    void overviewShouldRestoreBorrowableCountAfterReturningAllDevices() {
+        UserAccount dispatcher = createBorrowLimitTestUser("129", "归还恢复可借数量测试调度员");
+
+        deviceService.applyDevices(dispatcher, applyRequest(3));
+        assertEquals(0, deviceService.getOverview(dispatcher).getAvailableCount());
+
+        deviceService.returnDevices(dispatcher, null);
+
+        assertEquals(3, deviceService.getOverview(dispatcher).getAvailableCount());
+    }
+
     private UserAccount createBorrowLimitTestUser(String prefix, String name) {
         String phone = prefix + String.format("%08d", System.nanoTime() % 100000000L);
         return userAccountRepository.save(UserAccount.builder()

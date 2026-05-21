@@ -116,8 +116,12 @@ export default {
     async handleReturn(deviceIds) {
       this.loading = true
       try {
-        await returnDevices(deviceIds)
-        await this.refreshPage()
+        const devices = await returnDevices(deviceIds)
+        if (Array.isArray(devices)) {
+          this.deviceStore.devices = devices
+          this.deviceStore.syncSelectedDevice()
+        }
+        await this.deviceStore.refreshOverview()
         this.$message.success('归还成功')
       } catch (error) {
         this.$message.error(error.message)
