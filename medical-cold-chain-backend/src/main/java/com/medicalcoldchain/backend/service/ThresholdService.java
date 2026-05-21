@@ -20,11 +20,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ThresholdService {
 
-    private static final double DEFAULT_TEMP_MIN = 2D;
-    private static final double DEFAULT_TEMP_MAX = 8D;
-    private static final double DEFAULT_HUMIDITY_MIN = 35D;
-    private static final double DEFAULT_HUMIDITY_MAX = 75D;
-    private static final double DEFAULT_LIGHT_MAX = 10D;
+    private static final double DEFAULT_TEMP_MIN = 3D;
+    private static final double DEFAULT_TEMP_MAX = 7D;
+    private static final double DEFAULT_HUMIDITY_MIN = 45D;
+    private static final double DEFAULT_HUMIDITY_MAX = 70D;
+    private static final double DEFAULT_LIGHT_MAX = 9D;
     private static final int DEFAULT_DURATION_LIMIT_HOURS = 8;
 
     private final DeviceThresholdRepository deviceThresholdRepository;

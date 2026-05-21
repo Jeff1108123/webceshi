@@ -63,31 +63,12 @@
         </section>
 
         <section class="trend-list">
-          <TrendChartCard
-            title="温度趋势"
-            unit="°C"
-            color="#0f7bff"
+          <CombinedTrendChartCard
             :labels="pointLabels"
-            :values="temperatureSeries"
-            :threshold-min="historyData.threshold.tempMin"
-            :threshold-max="historyData.threshold.tempMax"
-          />
-          <TrendChartCard
-            title="湿度趋势"
-            unit="%"
-            color="#1f9d66"
-            :labels="pointLabels"
-            :values="humiditySeries"
-            :threshold-min="historyData.threshold.humidityMin"
-            :threshold-max="historyData.threshold.humidityMax"
-          />
-          <TrendChartCard
-            title="光照趋势"
-            unit="Lux"
-            color="#d97706"
-            :labels="pointLabels"
-            :values="lightSeries"
-            :threshold-max="historyData.threshold.lightMax"
+            :temperature-values="temperatureSeries"
+            :humidity-values="humiditySeries"
+            :light-values="lightSeries"
+            :threshold="historyData.threshold"
           />
         </section>
 
@@ -112,7 +93,7 @@
 
 <script>
 import AppShell from './common/AppShell.vue'
-import TrendChartCard from './common/TrendChartCard.vue'
+import CombinedTrendChartCard from './common/CombinedTrendChartCard.vue'
 import { fetchHistory } from '../api/medicalColdChain'
 import { useDeviceStore } from '../store/deviceStore'
 import { formatDateTime, formatMonthDayTime } from '../utils/dateTime'
@@ -121,7 +102,7 @@ export default {
   name: 'SixthPage',
   components: {
     AppShell,
-    TrendChartCard
+    CombinedTrendChartCard
   },
   data() {
     return {

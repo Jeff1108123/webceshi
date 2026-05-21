@@ -9,6 +9,7 @@ import com.medicalcoldchain.backend.dto.auth.SendCodeRequest;
 import com.medicalcoldchain.backend.dto.auth.SendCodeResponse;
 import com.medicalcoldchain.backend.dto.device.ApplyDeviceRequest;
 import com.medicalcoldchain.backend.dto.device.DeviceBorrowRecordResponse;
+import com.medicalcoldchain.backend.dto.device.ThresholdResponse;
 import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.enums.UserRole;
@@ -280,6 +281,21 @@ class MedicalColdChainBackendApplicationTests {
         deviceService.returnDevices(dispatcher, null);
 
         assertEquals(3, deviceService.getOverview(dispatcher).getAvailableCount());
+    }
+
+    @Test
+    void newDeviceThresholdShouldUseNarrowDefaultRange() {
+        UserAccount dispatcher = createBorrowLimitTestUser("128", "默认阈值测试调度员");
+
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
+        ThresholdResponse threshold = deviceService.getThreshold(dispatcher, deviceId);
+
+        assertEquals(3D, threshold.getTempMin());
+        assertEquals(7D, threshold.getTempMax());
+        assertEquals(45D, threshold.getHumidityMin());
+        assertEquals(70D, threshold.getHumidityMax());
+        assertEquals(9D, threshold.getLightMax());
     }
 
     private UserAccount createBorrowLimitTestUser(String prefix, String name) {
