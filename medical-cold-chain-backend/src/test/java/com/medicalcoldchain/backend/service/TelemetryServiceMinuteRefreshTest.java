@@ -45,7 +45,7 @@ class TelemetryServiceMinuteRefreshTest {
     }
 
     @Test
-    void historyTimelineCoversLongestSelectableRange() {
+    void historyRequestsAreCappedAtTwentyFourHours() {
         TransportDevice device = transportDeviceRepository.save(TransportDevice.builder()
                 .deviceCode("TEST-HISTORY-RANGE-" + System.nanoTime())
                 .deviceName("测试冷链箱")
@@ -60,7 +60,7 @@ class TelemetryServiceMinuteRefreshTest {
 
         assertThat(records).isNotEmpty();
         LocalDateTime currentMinute = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-        assertThat(records.get(0).getRecordedAt()).isEqualTo(currentMinute.minusHours(72));
+        assertThat(records.get(0).getRecordedAt()).isEqualTo(currentMinute.minusHours(24));
         assertThat(records.get(records.size() - 1).getRecordedAt()).isEqualTo(currentMinute);
     }
 }

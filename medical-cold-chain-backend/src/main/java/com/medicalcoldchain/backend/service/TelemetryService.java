@@ -23,7 +23,7 @@ import java.util.List;
 public class TelemetryService {
 
     private static final int HISTORY_STEP_MINUTES = 1;
-    private static final int HISTORY_WINDOW_HOURS = 72;
+    private static final int HISTORY_WINDOW_HOURS = 24;
 
     private final TelemetryRecordRepository telemetryRecordRepository;
     private final DeviceLocationRepository deviceLocationRepository;
@@ -72,7 +72,8 @@ public class TelemetryService {
     public List<TelemetryRecord> getHistoryRecords(TransportDevice device, int hours) {
         LocalDateTime end = alignTime(LocalDateTime.now(), HISTORY_STEP_MINUTES);
         ensureTimeline(device, end);
-        LocalDateTime start = end.minusHours(hours);
+        int cappedHours = Math.max(1, Math.min(hours, HISTORY_WINDOW_HOURS));
+        LocalDateTime start = end.minusHours(cappedHours);
         return telemetryRecordRepository.findByDeviceIdAndRecordedAtBetweenOrderByRecordedAtAsc(device.getId(), start, end);
     }
 
