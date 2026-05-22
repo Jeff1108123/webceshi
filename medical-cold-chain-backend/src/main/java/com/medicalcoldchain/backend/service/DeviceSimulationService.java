@@ -50,7 +50,7 @@ public class DeviceSimulationService {
                 96 - (batteryElapsedMinutes / 60.0) * 0.08 - (seed % 7) + Math.sin(phase * 0.18) * 1.2,
                 34,
                 99));
-        boolean signalStatus = (recordedAt.getMinute() + seed) % 113 != 0;
+        boolean signalStatus = (minutes + seed) % 113 != 0;
 
         return new SimulatedTelemetry(
                 round(temperature),

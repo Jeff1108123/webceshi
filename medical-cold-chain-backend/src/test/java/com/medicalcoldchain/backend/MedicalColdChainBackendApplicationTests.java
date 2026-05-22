@@ -257,57 +257,73 @@ class MedicalColdChainBackendApplicationTests {
     @Test
     void simulatedTelemetryShouldChangeSmoothlyBetweenMinutes() {
         LocalDateTime start = LocalDateTime.of(2026, 5, 21, 0, 0);
-        DeviceSimulationService.SimulatedTelemetry previous = deviceSimulationService.simulateTelemetry("MCC-SMOOTH-001", start);
-        int failedSignalCount = previous.signalStatus() ? 0 : 1;
-        int highTemperatureCount = previous.temperature() > 8 ? 1 : 0;
-        int highLightCount = previous.light() > 12 ? 1 : 0;
-        int sampleCount = 1;
+        List<String> deviceCodes = List.of("MCC-SMOOTH-001", "MCC-001", "MCC-002", "MCC-003");
 
-        assertTrue(previous.temperature() >= 0.5 && previous.temperature() <= 10.5,
-                "temperature out of realistic cold-chain range at minute 0: " + previous.temperature());
-        assertTrue(previous.humidity() >= 42 && previous.humidity() <= 76,
-                "humidity out of realistic cold-chain range at minute 0: " + previous.humidity());
-        assertTrue(previous.light() >= 0 && previous.light() <= 18,
-                "light out of realistic cold-chain range at minute 0: " + previous.light());
+        for (String deviceCode : deviceCodes) {
+            DeviceSimulationService.SimulatedTelemetry previous = deviceSimulationService.simulateTelemetry(deviceCode, start);
+            int failedSignalCount = previous.signalStatus() ? 0 : 1;
+            int temperatureAlarmCount = isTemperatureAlarm(previous) ? 1 : 0;
+            int humidityAlarmCount = isHumidityAlarm(previous) ? 1 : 0;
+            int lightAlarmCount = isLightAlarm(previous) ? 1 : 0;
+            int alarmCount = isAlarm(previous) ? 1 : 0;
+            int sampleCount = 1;
 
-        for (int minute = 1; minute <= 6 * 60; minute++) {
-            DeviceSimulationService.SimulatedTelemetry current = deviceSimulationService
-                    .simulateTelemetry("MCC-SMOOTH-001", start.plusMinutes(minute));
-            sampleCount++;
-            if (!current.signalStatus()) {
-                failedSignalCount++;
+            assertTrue(previous.temperature() >= 0.5 && previous.temperature() <= 10.5,
+                    "temperature out of realistic cold-chain range at minute 0 for " + deviceCode + ": " + previous.temperature());
+            assertTrue(previous.humidity() >= 42 && previous.humidity() <= 76,
+                    "humidity out of realistic cold-chain range at minute 0 for " + deviceCode + ": " + previous.humidity());
+            assertTrue(previous.light() >= 0 && previous.light() <= 18,
+                    "light out of realistic cold-chain range at minute 0 for " + deviceCode + ": " + previous.light());
+
+            for (int minute = 1; minute <= 6 * 60; minute++) {
+                DeviceSimulationService.SimulatedTelemetry current = deviceSimulationService
+                        .simulateTelemetry(deviceCode, start.plusMinutes(minute));
+                sampleCount++;
+                if (!current.signalStatus()) {
+                    failedSignalCount++;
+                }
+                if (isTemperatureAlarm(current)) {
+                    temperatureAlarmCount++;
+                }
+                if (isHumidityAlarm(current)) {
+                    humidityAlarmCount++;
+                }
+                if (isLightAlarm(current)) {
+                    lightAlarmCount++;
+                }
+                if (isAlarm(current)) {
+                    alarmCount++;
+                }
+
+                assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.9,
+                        "temperature jumped at minute " + minute + " for " + deviceCode);
+                assertTrue(Math.abs(current.humidity() - previous.humidity()) <= 0.9,
+                        "humidity jumped at minute " + minute + " for " + deviceCode);
+                assertTrue(Math.abs(current.light() - previous.light()) <= 1.6,
+                        "light jumped at minute " + minute + " for " + deviceCode);
+
+                assertTrue(current.temperature() >= 0.5 && current.temperature() <= 10.5,
+                        "temperature out of realistic cold-chain range at minute " + minute + " for " + deviceCode + ": " + current.temperature());
+                assertTrue(current.humidity() >= 42 && current.humidity() <= 76,
+                        "humidity out of realistic cold-chain range at minute " + minute + " for " + deviceCode + ": " + current.humidity());
+                assertTrue(current.light() >= 0 && current.light() <= 18,
+                        "light out of realistic cold-chain range at minute " + minute + " for " + deviceCode + ": " + current.light());
+
+                previous = current;
             }
-            if (current.temperature() > 8) {
-                highTemperatureCount++;
-            }
-            if (current.light() > 12) {
-                highLightCount++;
-            }
 
-            assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.9,
-                    "temperature jumped at minute " + minute);
-            assertTrue(Math.abs(current.humidity() - previous.humidity()) <= 0.9,
-                    "humidity jumped at minute " + minute);
-            assertTrue(Math.abs(current.light() - previous.light()) <= 1.6,
-                    "light jumped at minute " + minute);
-
-            assertTrue(current.temperature() >= 0.5 && current.temperature() <= 10.5,
-                    "temperature out of realistic cold-chain range at minute " + minute + ": " + current.temperature());
-            assertTrue(current.humidity() >= 42 && current.humidity() <= 76,
-                    "humidity out of realistic cold-chain range at minute " + minute + ": " + current.humidity());
-            assertTrue(current.light() >= 0 && current.light() <= 18,
-                    "light out of realistic cold-chain range at minute " + minute + ": " + current.light());
-
-            previous = current;
+            assertTrue(failedSignalCount > 0, "expected occasional simulated signal failures for " + deviceCode);
+            assertTrue(failedSignalCount < sampleCount * 0.10,
+                    "signal failures should remain sparse for " + deviceCode + ", but got " + failedSignalCount + " of " + sampleCount);
+            assertTrue(temperatureAlarmCount < sampleCount * 0.08,
+                    "temperature alarms should remain uncommon for " + deviceCode + ", but got " + temperatureAlarmCount + " of " + sampleCount);
+            assertTrue(humidityAlarmCount < sampleCount * 0.08,
+                    "humidity alarms should remain uncommon for " + deviceCode + ", but got " + humidityAlarmCount + " of " + sampleCount);
+            assertTrue(lightAlarmCount < sampleCount * 0.06,
+                    "light alarms should remain uncommon for " + deviceCode + ", but got " + lightAlarmCount + " of " + sampleCount);
+            assertTrue(alarmCount < sampleCount * 0.12,
+                    "overall alarm moments should remain uncommon for " + deviceCode + ", but got " + alarmCount + " of " + sampleCount);
         }
-
-        assertTrue(failedSignalCount > 0, "expected occasional simulated signal failures");
-        assertTrue(failedSignalCount < sampleCount * 0.10,
-                "signal failures should remain sparse, but got " + failedSignalCount + " of " + sampleCount);
-        assertTrue(highTemperatureCount < sampleCount * 0.08,
-                "high temperature moments should remain uncommon, but got " + highTemperatureCount + " of " + sampleCount);
-        assertTrue(highLightCount < sampleCount * 0.06,
-                "high light moments should remain uncommon, but got " + highLightCount + " of " + sampleCount);
     }
 
     @Test
@@ -359,6 +375,25 @@ class MedicalColdChainBackendApplicationTests {
         assertEquals(45D, threshold.getHumidityMin());
         assertEquals(70D, threshold.getHumidityMax());
         assertEquals(9D, threshold.getLightMax());
+    }
+
+    private boolean isAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
+        return isTemperatureAlarm(telemetry)
+                || isHumidityAlarm(telemetry)
+                || isLightAlarm(telemetry)
+                || !telemetry.signalStatus();
+    }
+
+    private boolean isTemperatureAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
+        return telemetry.temperature() < 3 || telemetry.temperature() > 7;
+    }
+
+    private boolean isHumidityAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
+        return telemetry.humidity() < 45 || telemetry.humidity() > 70;
+    }
+
+    private boolean isLightAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
+        return telemetry.light() > 9;
     }
 
     private double roundToTwoDecimals(double value) {
