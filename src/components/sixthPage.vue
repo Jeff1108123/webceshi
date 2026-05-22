@@ -12,8 +12,6 @@
             <option :value="6">近 6 小时</option>
             <option :value="12">近 12 小时</option>
             <option :value="24">近 24 小时</option>
-            <option :value="48">近 48 小时</option>
-            <option :value="72">近 72 小时</option>
           </select>
         </div>
         <div class="toolbar-group toolbar-meta">
@@ -176,9 +174,7 @@ export default {
       const granularityMap = {
         6: 5,
         12: 10,
-        24: 15,
-        48: 30,
-        72: 60
+        24: 15
       }
       return granularityMap[this.hours] || 15
     },
