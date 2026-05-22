@@ -14,6 +14,9 @@ pdf_text.txt
 .env.local
 .env.*.local
 
+# local agent metadata
+.serena/
+
 # Log files
 npm-debug.log*
 yarn-debug.log*

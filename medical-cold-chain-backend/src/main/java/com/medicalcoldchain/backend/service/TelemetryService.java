@@ -23,7 +23,7 @@ import java.util.List;
 public class TelemetryService {
 
     private static final int HISTORY_STEP_MINUTES = 1;
-    private static final int HISTORY_WINDOW_HOURS = 24;
+    private static final int HISTORY_WINDOW_HOURS = 72;
 
     private final TelemetryRecordRepository telemetryRecordRepository;
     private final DeviceLocationRepository deviceLocationRepository;
