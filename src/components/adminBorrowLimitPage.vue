@@ -60,6 +60,14 @@
                 <button class="ghost-btn" :disabled="loading || item.borrowLimitOverride === null" @click="clearUserLimit(item)">
                   清除覆盖
                 </button>
+                <button
+                  class="danger-btn"
+                  :disabled="loading || isAdminRole(item.role)"
+                  :title="isAdminRole(item.role) ? '不能删除超级管理员' : '删除用户'"
+                  @click="deleteUser(item)"
+                >
+                  删除用户
+                </button>
               </td>
             </tr>
           </tbody>
@@ -71,7 +79,12 @@
 
 <script>
 import AppShell from './common/AppShell.vue'
-import { fetchBorrowLimits, updateDefaultBorrowLimit, updateUserBorrowLimit } from '../api/medicalColdChain'
+import {
+  deleteAdminUser,
+  fetchBorrowLimits,
+  updateDefaultBorrowLimit,
+  updateUserBorrowLimit
+} from '../api/medicalColdChain'
 
 function toPositiveInteger(value) {
   const numberValue = Number(value)
@@ -106,8 +119,11 @@ export default {
     this.loadBorrowLimits()
   },
   methods: {
+    isAdminRole(role) {
+      return String(role || '').toUpperCase() === 'ADMIN'
+    },
     roleLabel(role) {
-      return String(role || '').toUpperCase() === 'ADMIN' ? '超级管理员' : '普通用户'
+      return this.isAdminRole(role) ? '超级管理员' : '普通用户'
     },
     updateLimitForm(userId, value) {
       this.$set(this.limitForms, userId, value ? Number(value) : null)
@@ -173,6 +189,30 @@ export default {
         const payload = await updateUserBorrowLimit(item.userId, null)
         this.syncForms(payload || {})
         this.$message.success('已清除用户覆盖上限')
+      } catch (error) {
+        this.$message.error(error.message)
+      } finally {
+        this.loading = false
+      }
+    },
+    async deleteUser(item) {
+      if (this.isAdminRole(item.role)) {
+        this.$message.error('不能删除超级管理员')
+        return
+      }
+      if (Number(item.currentBorrowCount || 0) > 0) {
+        this.$message.error('该用户仍有在用设备，请先强制归还后再删除')
+        return
+      }
+      const displayName = item.name || item.phone || '该用户'
+      if (!window.confirm(`确定删除 ${displayName} 吗？此操作不可撤销。`)) {
+        return
+      }
+      this.loading = true
+      try {
+        const payload = await deleteAdminUser(item.userId)
+        this.syncForms(payload || {})
+        this.$message.success('用户已删除')
       } catch (error) {
         this.$message.error(error.message)
       } finally {
@@ -281,6 +321,18 @@ button:hover:not(:disabled) {
   border-color: var(--line);
   background: rgba(10, 27, 50, 0.62);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.danger-btn {
+  color: #ffe7e7;
+  border-color: rgba(248, 113, 113, 0.46);
+  background: linear-gradient(135deg, rgba(185, 28, 28, 0.34), rgba(127, 29, 29, 0.26));
+  box-shadow: 0 10px 24px rgba(248, 113, 113, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.danger-btn:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.72);
+  box-shadow: 0 12px 28px rgba(248, 113, 113, 0.16);
 }
 
 .table-wrap {

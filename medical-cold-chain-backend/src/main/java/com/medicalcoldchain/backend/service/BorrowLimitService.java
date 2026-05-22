@@ -91,6 +91,20 @@ public class BorrowLimitService {
         return buildOverview(getDefaultLimit());
     }
 
+    @Transactional
+    public BorrowLimitOverviewResponse deleteUser(Long userId) {
+        UserAccount user = userAccountRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("用户不存在"));
+        if (resolveRole(user) == UserRole.ADMIN) {
+            throw new BusinessException("不能删除超级管理员");
+        }
+        if (!transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(userId).isEmpty()) {
+            throw new BusinessException("该用户仍有在用设备，请先强制归还后再删除");
+        }
+        userAccountRepository.delete(user);
+        return buildOverview(getDefaultLimit());
+    }
+
     private BorrowLimitOverviewResponse buildOverview(int defaultLimit) {
         List<UserAccount> users = new ArrayList<>(userAccountRepository.findAllByOrderByCreatedAtAsc());
         users.sort(Comparator

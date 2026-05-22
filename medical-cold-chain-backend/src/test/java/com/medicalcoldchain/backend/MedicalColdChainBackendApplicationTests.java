@@ -14,6 +14,7 @@ import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.enums.UserRole;
 import com.medicalcoldchain.backend.exception.BusinessException;
+import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import com.medicalcoldchain.backend.repository.UserAccountRepository;
 import com.medicalcoldchain.backend.service.AuthService;
 import com.medicalcoldchain.backend.service.BorrowLimitService;
@@ -46,6 +47,9 @@ class MedicalColdChainBackendApplicationTests {
 
     @Autowired
     private UserAccountRepository userAccountRepository;
+
+    @Autowired
+    private TransportDeviceRepository transportDeviceRepository;
 
     @Autowired
     private DeviceSimulationService deviceSimulationService;
@@ -375,6 +379,48 @@ class MedicalColdChainBackendApplicationTests {
         assertEquals(45D, threshold.getHumidityMin());
         assertEquals(70D, threshold.getHumidityMax());
         assertEquals(9D, threshold.getLightMax());
+    }
+
+    @Test
+    void adminShouldDeleteOrdinaryUserWithoutBorrowedDevices() {
+        UserAccount dispatcher = createBorrowLimitTestUser("127", "删除用户测试调度员");
+
+        BorrowLimitOverviewResponse overview = borrowLimitService.deleteUser(dispatcher.getId());
+
+        assertFalse(userAccountRepository.existsById(dispatcher.getId()));
+        assertTrue(overview.getUsers().stream().noneMatch(user -> dispatcher.getId().equals(user.getUserId())));
+    }
+
+    @Test
+    void adminShouldNotDeleteMissingUser() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> borrowLimitService.deleteUser(-1L));
+
+        assertEquals("用户不存在", exception.getMessage());
+    }
+
+    @Test
+    void adminShouldNotDeleteSuperAdminUser() {
+        UserAccount admin = userAccountRepository.findByPhone("18800000000").orElseThrow();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> borrowLimitService.deleteUser(admin.getId()));
+
+        assertEquals("不能删除超级管理员", exception.getMessage());
+        assertTrue(userAccountRepository.existsById(admin.getId()));
+    }
+
+    @Test
+    void adminShouldNotDeleteUserWithBorrowedDevices() {
+        UserAccount dispatcher = createBorrowLimitTestUser("126", "有设备删除拦截测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> borrowLimitService.deleteUser(dispatcher.getId()));
+
+        assertEquals("该用户仍有在用设备，请先强制归还后再删除", exception.getMessage());
+        assertTrue(userAccountRepository.existsById(dispatcher.getId()));
+        assertEquals(1, transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(dispatcher.getId()).size());
     }
 
     private boolean isAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {

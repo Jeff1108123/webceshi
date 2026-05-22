@@ -76,3 +76,7 @@ export function updateDefaultBorrowLimit(limit) {
 export function updateUserBorrowLimit(userId, limit) {
   return request.put(`/devices/users/${userId}/borrow-limit`, { limit })
 }
+
+export function deleteAdminUser(userId) {
+  return request.delete(`/devices/users/${userId}`)
+}

@@ -22,6 +22,7 @@ import com.medicalcoldchain.backend.service.BorrowLimitService;
 import com.medicalcoldchain.backend.service.DeviceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -96,6 +97,15 @@ public class DeviceController {
         UserAccount user = authService.requireUser(authorization);
         authService.requireAdmin(user);
         return ApiResponse.ok("用户借用上限已保存", borrowLimitService.updateUserBorrowLimit(userId, request));
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public ApiResponse<BorrowLimitOverviewResponse> deleteUser(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable Long userId) {
+        UserAccount user = authService.requireUser(authorization);
+        authService.requireAdmin(user);
+        return ApiResponse.ok("用户已删除", borrowLimitService.deleteUser(userId));
     }
 
     @PostMapping("/apply")
