@@ -36,12 +36,13 @@ class TelemetryServiceMinuteRefreshTest {
                 .build());
 
         telemetryService.generateBorrowHistory(device, LocalDateTime.now().minusHours(1));
+        LocalDateTime beforeRequest = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
         List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 1);
+        LocalDateTime afterRequest = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
 
         assertThat(records).isNotEmpty();
         LocalDateTime lastRecordedAt = records.get(records.size() - 1).getRecordedAt();
-        LocalDateTime currentMinute = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-        assertThat(lastRecordedAt).isEqualTo(currentMinute);
+        assertThat(lastRecordedAt).isBetween(beforeRequest, afterRequest);
     }
 
     @Test
