@@ -218,7 +218,7 @@ public class DeviceService {
 
     @Transactional
     public HistoryResponse getHistory(UserAccount user, Long deviceId, Integer hours) {
-        int safeHours = hours == null ? 24 : Math.max(1, Math.min(hours, 72));
+        int safeHours = hours == null ? 24 : Math.max(1, Math.min(hours, 24));
         TransportDevice device = getOwnedDevice(user, deviceId);
         DeviceThreshold threshold = thresholdService.ensureThreshold(user, device);
         List<TelemetryPointResponse> points = telemetryService.getHistoryRecords(device, safeHours)

@@ -59,8 +59,11 @@ class TelemetryServiceMinuteRefreshTest {
         List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 72);
 
         assertThat(records).isNotEmpty();
-        LocalDateTime currentMinute = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-        assertThat(records.get(0).getRecordedAt()).isEqualTo(currentMinute.minusHours(24));
-        assertThat(records.get(records.size() - 1).getRecordedAt()).isEqualTo(currentMinute);
+        LocalDateTime first = records.get(0).getRecordedAt();
+        LocalDateTime last = records.get(records.size() - 1).getRecordedAt();
+        assertThat(first).isEqualTo(last.minusHours(24));
+        assertThat(last).isBetween(
+                LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES).minusMinutes(1),
+                LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES));
     }
 }
