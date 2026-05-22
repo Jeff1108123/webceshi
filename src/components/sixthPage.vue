@@ -63,12 +63,11 @@
         </section>
 
         <section class="trend-list">
-          <CombinedTrendChartCard
-            :labels="pointLabels"
-            :temperature-values="temperatureSeries"
-            :humidity-values="humiditySeries"
-            :light-values="lightSeries"
-            :threshold="historyData.threshold"
+          <SingleMetricTrendChart
+            :metric="activeMetricConfig"
+            :points="aggregatedMetricPoints"
+            :granularity-minutes="displayGranularityMinutes"
+            @density-change="handleDensityChange"
           />
         </section>
 
@@ -93,7 +92,7 @@
 
 <script>
 import AppShell from './common/AppShell.vue'
-import CombinedTrendChartCard from './common/CombinedTrendChartCard.vue'
+import SingleMetricTrendChart from './common/SingleMetricTrendChart.vue'
 import { fetchHistory } from '../api/medicalColdChain'
 import { useDeviceStore } from '../store/deviceStore'
 import { formatDateTime, formatMonthDayTime } from '../utils/dateTime'
@@ -102,7 +101,7 @@ export default {
   name: 'SixthPage',
   components: {
     AppShell,
-    CombinedTrendChartCard
+    SingleMetricTrendChart
   },
   data() {
     return {
@@ -112,7 +111,9 @@ export default {
       historyData: null,
       loading: false,
       loadedAt: '',
-      activeMetric: 'temperature'
+      activeMetric: 'temperature',
+      granularityOptions: [1, 2, 5, 10, 15, 30, 60],
+      manualGranularityMinutes: null
     }
   },
   computed: {
@@ -121,9 +122,6 @@ export default {
     },
     hasPoints() {
       return this.points.length > 0
-    },
-    pointLabels() {
-      return this.points.map(item => formatMonthDayTime(item.recordedAt))
     },
     temperatureSeries() {
       return this.points.map(item => item.temperature)
@@ -137,17 +135,84 @@ export default {
     latestSnapshot() {
       return this.points.length ? this.points[this.points.length - 1] : null
     },
+    metricConfigs() {
+      const threshold = this.historyData && this.historyData.threshold ? this.historyData.threshold : {}
+      const { tempMin, tempMax, humidityMin, humidityMax, lightMax } = threshold
+
+      return {
+        temperature: {
+          key: 'temperature',
+          field: 'temperature',
+          label: '温度',
+          unit: '°C',
+          color: '#2f8cff',
+          thresholdMin: tempMin,
+          thresholdMax: tempMax
+        },
+        humidity: {
+          key: 'humidity',
+          field: 'humidity',
+          label: '湿度',
+          unit: '%',
+          color: '#21d07a',
+          thresholdMin: humidityMin,
+          thresholdMax: humidityMax
+        },
+        light: {
+          key: 'light',
+          field: 'light',
+          label: '光照',
+          unit: 'Lux',
+          color: '#f7c948',
+          thresholdMin: null,
+          thresholdMax: lightMax
+        }
+      }
+    },
+    activeMetricConfig() {
+      return this.metricConfigs[this.activeMetric] || this.metricConfigs.temperature
+    },
+    defaultGranularityMinutes() {
+      const granularityMap = {
+        6: 5,
+        12: 10,
+        24: 15,
+        48: 30,
+        72: 60
+      }
+      return granularityMap[this.hours] || 15
+    },
+    displayGranularityMinutes() {
+      return this.manualGranularityMinutes || this.defaultGranularityMinutes
+    },
+    aggregatedMetricPoints() {
+      return this.aggregateMetricPoints(this.activeMetricConfig, this.displayGranularityMinutes)
+    },
     dataCurrentAt() {
       return this.latestSnapshot ? this.latestSnapshot.recordedAt : ''
     },
     alarmMoments() {
       if (!this.historyData || !this.historyData.threshold) return []
       const { tempMin, tempMax, humidityMin, humidityMax, lightMax } = this.historyData.threshold
+      const normalizedThresholds = {
+        tempMin: this.normalizeFiniteNumber(tempMin),
+        tempMax: this.normalizeFiniteNumber(tempMax),
+        humidityMin: this.normalizeFiniteNumber(humidityMin),
+        humidityMax: this.normalizeFiniteNumber(humidityMax),
+        lightMax: this.normalizeFiniteNumber(lightMax)
+      }
 
       return this.points.flatMap(point => {
         const alarms = []
+        const temperature = this.normalizeFiniteNumber(point.temperature)
+        const humidity = this.normalizeFiniteNumber(point.humidity)
+        const light = this.normalizeFiniteNumber(point.light)
 
-        if (point.temperature < tempMin || point.temperature > tempMax) {
+        if (
+          Number.isFinite(temperature) &&
+          ((Number.isFinite(normalizedThresholds.tempMin) && temperature < normalizedThresholds.tempMin) ||
+            (Number.isFinite(normalizedThresholds.tempMax) && temperature > normalizedThresholds.tempMax))
+        ) {
           alarms.push({
             recordedAt: point.recordedAt,
             type: '温度异常',
@@ -156,7 +221,11 @@ export default {
           })
         }
 
-        if (point.humidity < humidityMin || point.humidity > humidityMax) {
+        if (
+          Number.isFinite(humidity) &&
+          ((Number.isFinite(normalizedThresholds.humidityMin) && humidity < normalizedThresholds.humidityMin) ||
+            (Number.isFinite(normalizedThresholds.humidityMax) && humidity > normalizedThresholds.humidityMax))
+        ) {
           alarms.push({
             recordedAt: point.recordedAt,
             type: '湿度异常',
@@ -165,7 +234,7 @@ export default {
           })
         }
 
-        if (point.light > lightMax) {
+        if (Number.isFinite(light) && Number.isFinite(normalizedThresholds.lightMax) && light > normalizedThresholds.lightMax) {
           alarms.push({
             recordedAt: point.recordedAt,
             type: '光照异常',
@@ -235,6 +304,7 @@ export default {
       this.loadHistory()
     },
     hours() {
+      this.manualGranularityMinutes = null
       if (!this.selectedDeviceId) return
       this.loadHistory()
     }
@@ -258,6 +328,89 @@ export default {
       if (['temperature', 'humidity', 'light'].includes(metric)) {
         this.activeMetric = metric
       }
+    },
+    handleDensityChange(direction) {
+      const currentIndex = this.granularityOptions.indexOf(this.displayGranularityMinutes)
+      if (currentIndex === -1) return
+
+      const offset = direction === 'denser' ? -1 : 1
+      const nextIndex = Math.max(0, Math.min(this.granularityOptions.length - 1, currentIndex + offset))
+      this.manualGranularityMinutes = this.granularityOptions[nextIndex]
+    },
+    aggregateMetricPoints(metric, granularityMinutes) {
+      if (!metric || !metric.field || !this.points.length) return []
+
+      const bucketMs = Math.max(Number(granularityMinutes) || this.defaultGranularityMinutes, 1) * 60 * 1000
+      const sortedPoints = this.points
+        .map(point => ({
+          ...point,
+          timestamp: new Date(point.recordedAt).getTime()
+        }))
+        .filter(point => Number.isFinite(point.timestamp))
+        .sort((left, right) => left.timestamp - right.timestamp)
+
+      if (!sortedPoints.length) return []
+
+      const firstTimestamp = sortedPoints[0].timestamp
+      const buckets = []
+      const bucketMap = new Map()
+
+      sortedPoints.forEach(point => {
+        const rawValue = this.normalizeFiniteNumber(point[metric.field])
+        const bucketStart = firstTimestamp + Math.floor((point.timestamp - firstTimestamp) / bucketMs) * bucketMs
+        let bucket = bucketMap.get(bucketStart)
+
+        if (!bucket) {
+          bucket = {
+            bucketStart,
+            lastRecordedAt: null,
+            sum: 0,
+            count: 0,
+            alarm: false
+          }
+          bucketMap.set(bucketStart, bucket)
+          buckets.push(bucket)
+        }
+
+        if (Number.isFinite(rawValue)) {
+          bucket.lastRecordedAt = point.recordedAt
+          bucket.sum += rawValue
+          bucket.count += 1
+        }
+        if (this.isMetricPointAlarm(point, metric)) {
+          bucket.alarm = true
+        }
+      })
+
+      return buckets
+        .filter(bucket => bucket.count > 0)
+        .map(bucket => {
+          const value = Number((bucket.sum / bucket.count).toFixed(2))
+          return {
+            recordedAt: bucket.lastRecordedAt,
+            label: formatMonthDayTime(bucket.lastRecordedAt),
+            bucketStart: new Date(bucket.bucketStart).toISOString(),
+            value,
+            [metric.field]: value,
+            alarm: bucket.alarm
+          }
+        })
+    },
+    normalizeFiniteNumber(value) {
+      if (value === null || value === undefined || value === '') return null
+      const normalizedValue = Number(value)
+      return Number.isFinite(normalizedValue) ? normalizedValue : null
+    },
+    isMetricPointAlarm(point, metric) {
+      const value = this.normalizeFiniteNumber(point[metric.field])
+      if (!Number.isFinite(value)) return false
+
+      const min = this.normalizeFiniteNumber(metric.thresholdMin)
+      const max = this.normalizeFiniteNumber(metric.thresholdMax)
+
+      if (Number.isFinite(min) && value < min) return true
+      if (Number.isFinite(max) && value > max) return true
+      return false
     },
     async loadHistory() {
       if (!this.selectedDeviceId) return
@@ -496,26 +649,23 @@ button:disabled {
   gap: 12px;
 }
 
-.trend-list ::v-deep .combined-trend-card {
+.trend-list ::v-deep .single-metric-chart {
+  min-height: 460px;
   border-color: rgba(34, 211, 238, 0.16);
   background: linear-gradient(180deg, rgba(8, 47, 73, 0.44), rgba(2, 6, 23, 0.54));
   box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08), 0 14px 30px rgba(2, 6, 23, 0.24);
 }
 
-.trend-list ::v-deep .combined-head h4,
-.trend-list ::v-deep .stat-row strong {
+.trend-list ::v-deep .chart-head h4 {
   color: #e0f2fe;
 }
 
-.trend-list ::v-deep .combined-head p,
-.trend-list ::v-deep .legend,
-.trend-list ::v-deep .stat-row,
-.trend-list ::v-deep .stat-row small {
+.trend-list ::v-deep .chart-head p,
+.trend-list ::v-deep .granularity-pill {
   color: rgba(191, 219, 254, 0.68);
 }
 
-.trend-list ::v-deep .legend span,
-.trend-list ::v-deep .stat-row {
+.trend-list ::v-deep .granularity-pill {
   border: 1px solid rgba(34, 211, 238, 0.14);
   background: rgba(15, 23, 42, 0.5);
 }

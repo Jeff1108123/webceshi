@@ -1,5 +1,5 @@
 <template>
-  <article class="single-metric-chart" @wheel.prevent="handleWheel">
+  <article class="single-metric-chart" @wheel="handleWheel">
     <header class="chart-head">
       <div>
         <p class="eyebrow">历史单项趋势</p>
@@ -179,12 +179,10 @@ export default {
       return this.metric.field || this.metric.key || 'value'
     },
     thresholdMin() {
-      const value = Number(this.metric.thresholdMin)
-      return Number.isFinite(value) ? value : null
+      return this.normalizeThreshold(this.metric.thresholdMin)
     },
     thresholdMax() {
-      const value = Number(this.metric.thresholdMax)
-      return Number.isFinite(value) ? value : null
+      return this.normalizeThreshold(this.metric.thresholdMax)
     },
     isLightMetric() {
       const text = `${this.metricKey} ${this.metricField} ${this.metricLabel} ${this.metricUnit}`.toLowerCase()
@@ -387,15 +385,22 @@ export default {
       return this.chartDescription
     },
     areaGradientId() {
-      return `single-metric-area-${this.metricKey}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+      return `single-metric-area-${this.metricKey}-${this._uid}`.replace(/[^a-zA-Z0-9_-]/g, '-')
     },
     glowFilterId() {
-      return `single-metric-glow-${this.metricKey}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+      return `single-metric-glow-${this.metricKey}-${this._uid}`.replace(/[^a-zA-Z0-9_-]/g, '-')
     }
   },
   methods: {
     handleWheel(event) {
+      if (!event.ctrlKey && !event.metaKey) return
+      event.preventDefault()
       this.$emit('density-change', event.deltaY < 0 ? 'denser' : 'sparser')
+    },
+    normalizeThreshold(rawValue) {
+      if (rawValue === null || rawValue === undefined || rawValue === '') return null
+      const value = Number(rawValue)
+      return Number.isFinite(value) ? value : null
     },
     valueToY(value) {
       const range = Math.max(this.scale.max - this.scale.min, 1)

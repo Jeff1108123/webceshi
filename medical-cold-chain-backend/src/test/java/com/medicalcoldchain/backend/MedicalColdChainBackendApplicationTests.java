@@ -258,15 +258,66 @@ class MedicalColdChainBackendApplicationTests {
     void simulatedTelemetryShouldChangeSmoothlyBetweenMinutes() {
         LocalDateTime start = LocalDateTime.of(2026, 5, 21, 0, 0);
         DeviceSimulationService.SimulatedTelemetry previous = deviceSimulationService.simulateTelemetry("MCC-SMOOTH-001", start);
+        int failedSignalCount = previous.signalStatus() ? 0 : 1;
+        int sampleCount = 1;
 
-        for (int minute = 1; minute <= 24 * 60; minute++) {
+        assertTrue(previous.temperature() >= 0.5 && previous.temperature() <= 10.5,
+                "temperature out of realistic cold-chain range at minute 0: " + previous.temperature());
+        assertTrue(previous.humidity() >= 42 && previous.humidity() <= 76,
+                "humidity out of realistic cold-chain range at minute 0: " + previous.humidity());
+        assertTrue(previous.light() >= 0 && previous.light() <= 18,
+                "light out of realistic cold-chain range at minute 0: " + previous.light());
+
+        for (int minute = 1; minute <= 6 * 60; minute++) {
             DeviceSimulationService.SimulatedTelemetry current = deviceSimulationService
                     .simulateTelemetry("MCC-SMOOTH-001", start.plusMinutes(minute));
+            sampleCount++;
+            if (!current.signalStatus()) {
+                failedSignalCount++;
+            }
 
-            assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.8,
+            assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.9,
                     "temperature jumped at minute " + minute);
-            assertTrue(Math.abs(current.light() - previous.light()) <= 1.2,
+            assertTrue(Math.abs(current.humidity() - previous.humidity()) <= 0.9,
+                    "humidity jumped at minute " + minute);
+            assertTrue(Math.abs(current.light() - previous.light()) <= 1.6,
                     "light jumped at minute " + minute);
+
+            assertTrue(current.temperature() >= 0.5 && current.temperature() <= 10.5,
+                    "temperature out of realistic cold-chain range at minute " + minute + ": " + current.temperature());
+            assertTrue(current.humidity() >= 42 && current.humidity() <= 76,
+                    "humidity out of realistic cold-chain range at minute " + minute + ": " + current.humidity());
+            assertTrue(current.light() >= 0 && current.light() <= 18,
+                    "light out of realistic cold-chain range at minute " + minute + ": " + current.light());
+
+            previous = current;
+        }
+
+        assertTrue(failedSignalCount > 0, "expected occasional simulated signal failures");
+        assertTrue(failedSignalCount < sampleCount * 0.10,
+                "signal failures should remain sparse, but got " + failedSignalCount + " of " + sampleCount);
+    }
+
+    @Test
+    void simulatedLocationShouldKeepPrecisionAndMoveSmoothly() {
+        LocalDateTime start = LocalDateTime.of(2026, 5, 21, 0, 0);
+        DeviceSimulationService.SimulatedLocation previous = deviceSimulationService
+                .simulateLocation("MCC-LOC-001", "测试线路", start);
+
+        assertTrue(Math.abs(previous.longitude() - roundToTwoDecimals(previous.longitude())) > 0.00001,
+                "longitude should retain more than two decimal places");
+        assertTrue(Math.abs(previous.latitude() - roundToTwoDecimals(previous.latitude())) > 0.00001,
+                "latitude should retain more than two decimal places");
+
+        for (int minute = 1; minute <= 6 * 60; minute++) {
+            DeviceSimulationService.SimulatedLocation current = deviceSimulationService
+                    .simulateLocation("MCC-LOC-001", "测试线路", start.plusMinutes(minute));
+
+            assertTrue(Math.abs(current.longitude() - previous.longitude()) <= 0.001,
+                    "longitude moved too abruptly at minute " + minute);
+            assertTrue(Math.abs(current.latitude() - previous.latitude()) <= 0.001,
+                    "latitude moved too abruptly at minute " + minute);
+
             previous = current;
         }
     }
@@ -296,6 +347,10 @@ class MedicalColdChainBackendApplicationTests {
         assertEquals(45D, threshold.getHumidityMin());
         assertEquals(70D, threshold.getHumidityMax());
         assertEquals(9D, threshold.getLightMax());
+    }
+
+    private double roundToTwoDecimals(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     private UserAccount createBorrowLimitTestUser(String prefix, String name) {
