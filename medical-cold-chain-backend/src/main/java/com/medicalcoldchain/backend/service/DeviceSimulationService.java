@@ -24,33 +24,33 @@ public class DeviceSimulationService {
         int seed = Math.abs(deviceCode.hashCode());
         double phase = (minutes + seed % 360) / 60.0;
 
-        double handoffPulse = smoothCyclicPulse((minutes + seed) % 180, 24, 180, 9.5);
-        double doorOpenPulse = smoothCyclicPulse((minutes + seed) % 95, 88, 95, 4.8);
-        double routeDrift = Math.sin((minutes + seed % 720) / 360.0) * 0.65;
+        double handoffPulse = smoothCyclicPulse((minutes + seed) % 360, 48, 360, 8.0);
+        double doorOpenPulse = smoothCyclicPulse((minutes + seed) % 180, 164, 180, 3.8);
+        double routeDrift = Math.sin((minutes + seed % 720) / 360.0) * 0.48;
 
-        double temperature = 4.6
-                + Math.sin(phase * 0.54) * 1.35
-                + Math.cos(phase * 0.18 + seed % 11) * 0.48
+        double temperature = 4.5
+                + Math.sin(phase * 0.54) * 1.05
+                + Math.cos(phase * 0.18 + seed % 11) * 0.38
                 + routeDrift
-                + handoffPulse * 1.65
-                + doorOpenPulse * 0.72;
+                + handoffPulse * 1.05
+                + doorOpenPulse * 0.45;
 
         double humidity = 59
-                + Math.sin(phase * 0.34 + 1.5) * 6.4
-                + Math.cos(phase * 0.12 + seed % 9) * 2.1
-                - handoffPulse * 1.6
-                + routeDrift * 1.8;
+                + Math.sin(phase * 0.34 + 1.5) * 5.4
+                + Math.cos(phase * 0.12 + seed % 9) * 1.7
+                - handoffPulse * 1.0
+                + routeDrift * 1.4;
 
-        double lightExposure = smoothCyclicPulse((minutes + seed) % 160, 154, 160, 5.8);
-        double ambientLeak = Math.max(0, Math.sin(phase * 0.72 + seed % 5)) * 1.4;
-        double light = 3.2 + ambientLeak + doorOpenPulse * 3.4 + lightExposure * 7.2;
+        double lightExposure = smoothCyclicPulse((minutes + seed) % 300, 286, 300, 4.2);
+        double ambientLeak = Math.max(0, Math.sin(phase * 0.72 + seed % 5)) * 0.9;
+        double light = 2.8 + ambientLeak + doorOpenPulse * 2.4 + lightExposure * 4.8;
 
         long batteryElapsedMinutes = Math.min(Math.max(minutes, 0), 30L * 24 * 60);
         int batteryLevel = (int) Math.round(clamp(
                 96 - (batteryElapsedMinutes / 60.0) * 0.08 - (seed % 7) + Math.sin(phase * 0.18) * 1.2,
                 34,
                 99));
-        boolean signalStatus = (recordedAt.getMinute() + seed) % 41 != 0;
+        boolean signalStatus = (recordedAt.getMinute() + seed) % 113 != 0;
 
         return new SimulatedTelemetry(
                 round(temperature),

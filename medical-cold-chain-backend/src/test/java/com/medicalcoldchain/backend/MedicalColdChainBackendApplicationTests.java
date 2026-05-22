@@ -259,6 +259,8 @@ class MedicalColdChainBackendApplicationTests {
         LocalDateTime start = LocalDateTime.of(2026, 5, 21, 0, 0);
         DeviceSimulationService.SimulatedTelemetry previous = deviceSimulationService.simulateTelemetry("MCC-SMOOTH-001", start);
         int failedSignalCount = previous.signalStatus() ? 0 : 1;
+        int highTemperatureCount = previous.temperature() > 8 ? 1 : 0;
+        int highLightCount = previous.light() > 12 ? 1 : 0;
         int sampleCount = 1;
 
         assertTrue(previous.temperature() >= 0.5 && previous.temperature() <= 10.5,
@@ -274,6 +276,12 @@ class MedicalColdChainBackendApplicationTests {
             sampleCount++;
             if (!current.signalStatus()) {
                 failedSignalCount++;
+            }
+            if (current.temperature() > 8) {
+                highTemperatureCount++;
+            }
+            if (current.light() > 12) {
+                highLightCount++;
             }
 
             assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.9,
@@ -296,6 +304,10 @@ class MedicalColdChainBackendApplicationTests {
         assertTrue(failedSignalCount > 0, "expected occasional simulated signal failures");
         assertTrue(failedSignalCount < sampleCount * 0.10,
                 "signal failures should remain sparse, but got " + failedSignalCount + " of " + sampleCount);
+        assertTrue(highTemperatureCount < sampleCount * 0.08,
+                "high temperature moments should remain uncommon, but got " + highTemperatureCount + " of " + sampleCount);
+        assertTrue(highLightCount < sampleCount * 0.06,
+                "high light moments should remain uncommon, but got " + highLightCount + " of " + sampleCount);
     }
 
     @Test
