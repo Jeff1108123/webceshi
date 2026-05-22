@@ -5,8 +5,11 @@
         <p class="eyebrow">历史单项趋势</p>
         <h4>{{ metricLabel }}</h4>
       </div>
-      <div class="granularity-pill" aria-label="当前时间密度">
-        {{ granularityLabel }}
+      <div class="granularity-control">
+        <div class="granularity-pill" aria-label="当前时间密度">
+          {{ granularityLabel }}
+        </div>
+        <small>滚轮调整数据密度</small>
       </div>
     </header>
 
@@ -393,7 +396,6 @@ export default {
   },
   methods: {
     handleWheel(event) {
-      if (!event.ctrlKey && !event.metaKey) return
       event.preventDefault()
       this.$emit('density-change', event.deltaY < 0 ? 'denser' : 'sparser')
     },
@@ -489,6 +491,19 @@ export default {
   color: var(--text-strong);
   font-size: 22px;
   letter-spacing: 0.01em;
+}
+
+.granularity-control {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.granularity-control small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .granularity-pill {
