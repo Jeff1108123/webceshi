@@ -14,6 +14,7 @@ import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.enums.UserRole;
 import com.medicalcoldchain.backend.exception.BusinessException;
+import com.medicalcoldchain.backend.repository.DeviceBorrowRecordRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import com.medicalcoldchain.backend.repository.UserAccountRepository;
 import com.medicalcoldchain.backend.service.AuthService;
@@ -50,6 +51,9 @@ class MedicalColdChainBackendApplicationTests {
 
     @Autowired
     private TransportDeviceRepository transportDeviceRepository;
+
+    @Autowired
+    private DeviceBorrowRecordRepository deviceBorrowRecordRepository;
 
     @Autowired
     private DeviceSimulationService deviceSimulationService;
@@ -388,6 +392,21 @@ class MedicalColdChainBackendApplicationTests {
         BorrowLimitOverviewResponse overview = borrowLimitService.deleteUser(dispatcher.getId());
 
         assertFalse(userAccountRepository.existsById(dispatcher.getId()));
+        assertTrue(overview.getUsers().stream().noneMatch(user -> dispatcher.getId().equals(user.getUserId())));
+    }
+
+    @Test
+    void adminShouldDeleteOrdinaryUserAfterReturnedBorrowRecords() {
+        UserAccount dispatcher = createBorrowLimitTestUser("125", "归还后删除测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        deviceService.returnDevices(dispatcher, null);
+
+        assertTrue(deviceBorrowRecordRepository.countByBorrowerId(dispatcher.getId()) > 0);
+
+        BorrowLimitOverviewResponse overview = borrowLimitService.deleteUser(dispatcher.getId());
+
+        assertFalse(userAccountRepository.existsById(dispatcher.getId()));
+        assertEquals(0, deviceBorrowRecordRepository.countByBorrowerId(dispatcher.getId()));
         assertTrue(overview.getUsers().stream().noneMatch(user -> dispatcher.getId().equals(user.getUserId())));
     }
 

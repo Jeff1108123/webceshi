@@ -17,5 +17,9 @@ public interface DeviceBorrowRecordRepository extends JpaRepository<DeviceBorrow
             Long borrowerId
     );
 
+    long countByBorrowerId(Long borrowerId);
+
+    void deleteByBorrowerId(Long borrowerId);
+
     void deleteAllBy();
 }
