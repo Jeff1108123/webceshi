@@ -48,7 +48,7 @@ class TelemetryServiceMinuteRefreshTest {
     @Test
     void historyRequestsAreCappedAtTwentyFourHours() {
         TransportDevice device = transportDeviceRepository.save(TransportDevice.builder()
-                .deviceCode("TEST-HISTORY-RANGE-" + System.nanoTime())
+                .deviceCode("TEST-RANGE-" + System.nanoTime())
                 .deviceName("测试冷链箱")
                 .medicineName("测试药品")
                 .routeName("测试线路")

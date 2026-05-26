@@ -12,4 +12,8 @@ public interface DeviceThresholdRepository extends JpaRepository<DeviceThreshold
     Optional<DeviceThreshold> findByUserIdAndDeviceId(Long userId, Long deviceId);
 
     List<DeviceThreshold> findByUserIdAndDeviceIdIn(Long userId, Collection<Long> deviceIds);
+
+    long countByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
 }
