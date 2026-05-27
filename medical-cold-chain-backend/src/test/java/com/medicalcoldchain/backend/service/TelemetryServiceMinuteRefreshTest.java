@@ -1,8 +1,9 @@
 package com.medicalcoldchain.backend.service;
 
-import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.TelemetryRecord;
+import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.enums.DeviceStatus;
+import com.medicalcoldchain.backend.repository.TelemetryRecordRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,34 +22,49 @@ class TelemetryServiceMinuteRefreshTest {
     private TelemetryService telemetryService;
 
     @Autowired
+    private TelemetryRecordRepository telemetryRecordRepository;
+
+    @Autowired
     private TransportDeviceRepository transportDeviceRepository;
 
     @Test
-    void historyTimelineCanExtendToCurrentMinute() {
-        TransportDevice device = transportDeviceRepository.save(TransportDevice.builder()
-                .deviceCode("TEST-MINUTE-" + System.nanoTime())
-                .deviceName("测试冷链箱")
-                .medicineName("测试药品")
-                .routeName("测试线路")
-                .status(DeviceStatus.IN_USE)
-                .batteryLevel(100)
-                .signalStatus(true)
-                .build());
+    void historyQueriesDoNotGenerateTelemetryForEmptyDevice() {
+        TransportDevice device = createDevice("TEST-EMPTY-");
 
-        telemetryService.generateBorrowHistory(device, LocalDateTime.now().minusHours(1));
-        LocalDateTime beforeRequest = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-        List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 1);
-        LocalDateTime afterRequest = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-
-        assertThat(records).isNotEmpty();
-        LocalDateTime lastRecordedAt = records.get(records.size() - 1).getRecordedAt();
-        assertThat(lastRecordedAt).isBetween(beforeRequest, afterRequest);
+        assertThat(telemetryService.getLatestRecord(device)).isNull();
+        assertThat(telemetryService.getHistoryRecords(device, 1)).isEmpty();
     }
 
     @Test
-    void historyRequestsAreCappedAtTwentyFourHours() {
-        TransportDevice device = transportDeviceRepository.save(TransportDevice.builder()
-                .deviceCode("TEST-RANGE-" + System.nanoTime())
+    void borrowedDeviceHistoryIsGeneratedAndCappedAtTwentyFourHours() {
+        TransportDevice device = createDevice("TEST-BORROW-");
+        LocalDateTime oldRecordedAt = LocalDateTime.now().minusHours(25).truncatedTo(ChronoUnit.MINUTES);
+        telemetryRecordRepository.save(TelemetryRecord.builder()
+                .device(device)
+                .temperature(22.0)
+                .humidity(55.0)
+                .light(10.0)
+                .batteryLevel(80)
+                .signalStatus(true)
+                .recordedAt(oldRecordedAt)
+                .build());
+
+        LocalDateTime beforeGeneration = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        telemetryService.generateBorrowHistory(device, LocalDateTime.now());
+        List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 72);
+        LocalDateTime afterGeneration = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+
+        assertThat(records).isNotEmpty();
+        assertThat(records)
+                .extracting(TelemetryRecord::getRecordedAt)
+                .doesNotContain(oldRecordedAt);
+        assertThat(records.get(records.size() - 1).getRecordedAt())
+                .isBetween(beforeGeneration, afterGeneration);
+    }
+
+    private TransportDevice createDevice(String codePrefix) {
+        return transportDeviceRepository.save(TransportDevice.builder()
+                .deviceCode(codePrefix + System.nanoTime())
                 .deviceName("测试冷链箱")
                 .medicineName("测试药品")
                 .routeName("测试线路")
@@ -56,15 +72,5 @@ class TelemetryServiceMinuteRefreshTest {
                 .batteryLevel(100)
                 .signalStatus(true)
                 .build());
-
-        List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 72);
-
-        assertThat(records).isNotEmpty();
-        LocalDateTime first = records.get(0).getRecordedAt();
-        LocalDateTime last = records.get(records.size() - 1).getRecordedAt();
-        assertThat(first).isEqualTo(last.minusHours(24));
-        assertThat(last).isBetween(
-                LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES).minusMinutes(1),
-                LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES));
     }
 }

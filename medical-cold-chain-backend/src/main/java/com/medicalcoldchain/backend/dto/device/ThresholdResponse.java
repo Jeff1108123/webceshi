@@ -14,5 +14,4 @@ public class ThresholdResponse {
     private Double humidityMin;
     private Double humidityMax;
     private Double lightMax;
-    private Integer durationLimitHours;
 }

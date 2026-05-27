@@ -12,7 +12,6 @@ import com.medicalcoldchain.backend.enums.UserRole;
 import com.medicalcoldchain.backend.exception.BusinessException;
 import com.medicalcoldchain.backend.repository.AppSettingRepository;
 import com.medicalcoldchain.backend.repository.DeviceBorrowRecordRepository;
-import com.medicalcoldchain.backend.repository.DeviceThresholdRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import com.medicalcoldchain.backend.repository.UserAccountRepository;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +35,6 @@ public class BorrowLimitService {
     private final UserAccountRepository userAccountRepository;
     private final TransportDeviceRepository transportDeviceRepository;
     private final DeviceBorrowRecordRepository deviceBorrowRecordRepository;
-    private final DeviceThresholdRepository deviceThresholdRepository;
 
     @Transactional
     public int getDefaultLimit() {
@@ -105,7 +103,6 @@ public class BorrowLimitService {
         if (!transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(userId).isEmpty()) {
             throw new BusinessException("该用户仍有在用设备，请先强制归还后再删除");
         }
-        deviceThresholdRepository.deleteByUserId(userId);
         deviceBorrowRecordRepository.deleteByBorrowerId(userId);
         userAccountRepository.delete(user);
         return buildOverview(getDefaultLimit());

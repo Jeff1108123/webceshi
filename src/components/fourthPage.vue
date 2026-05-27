@@ -13,6 +13,7 @@
           <thead>
             <tr>
               <th>设备</th>
+              <th>上报时间</th>
               <th>温度</th>
               <th>湿度</th>
               <th>光照</th>
@@ -34,6 +35,7 @@
                 <span>{{ item.deviceCode }}</span>
                 <span class="alarm-status">状态：{{ item.telemetry && item.telemetry.alarm ? '告警' : '正常' }}</span>
               </td>
+              <td>{{ formatTelemetryTime(item.telemetry) }}</td>
               <td>{{ renderMetric(item.telemetry, 'temperature', '°C') }}</td>
               <td>{{ renderMetric(item.telemetry, 'humidity', '%') }}</td>
               <td>{{ renderMetric(item.telemetry, 'light', 'Lux') }}</td>
@@ -84,6 +86,9 @@ export default {
     renderMetric(record, key, unit) {
       if (!record) return '--'
       return `${record[key]}${unit}`
+    },
+    formatTelemetryTime(record) {
+      return record && record.recordedAt ? formatDateTime(record.recordedAt) : '--'
     },
     async loadLatestData() {
       this.loading = true

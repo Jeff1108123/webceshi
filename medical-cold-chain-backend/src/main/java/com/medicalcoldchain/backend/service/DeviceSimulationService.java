@@ -22,42 +22,45 @@ public class DeviceSimulationService {
     public SimulatedTelemetry simulateTelemetry(String deviceCode, LocalDateTime recordedAt) {
         long minutes = Duration.between(BASE_TIME, recordedAt).toMinutes();
         int seed = Math.abs(deviceCode.hashCode());
-        double phase = (minutes + seed % 360) / 60.0;
+        double phase = (minutes + seed % 1440) / 1440.0;
+        double slowPhase = (minutes + seed % 10080) / 10080.0;
 
-        double handoffPulse = smoothCyclicPulse((minutes + seed) % 360, 48, 360, 8.0);
-        double doorOpenPulse = smoothCyclicPulse((minutes + seed) % 180, 164, 180, 3.8);
-        double routeDrift = Math.sin((minutes + seed % 720) / 360.0) * 0.48;
+        double temperature = clamp(
+                25
+                        + Math.sin(phase * Math.PI * 2) * 3.1
+                        + Math.cos(slowPhase * Math.PI * 2 + seed % 13) * 1.2
+                        + Math.sin(phase * Math.PI * 4 + seed % 7) * 0.55,
+                20,
+                30);
 
-        double temperature = 4.5
-                + Math.sin(phase * 0.54) * 1.05
-                + Math.cos(phase * 0.18 + seed % 11) * 0.38
-                + routeDrift
-                + handoffPulse * 1.05
-                + doorOpenPulse * 0.45;
+        double humidity = clamp(
+                55
+                        + Math.sin(phase * Math.PI * 2 + 1.2 + seed % 5) * 8.5
+                        + Math.cos(slowPhase * Math.PI * 2 + seed % 11) * 4.2
+                        - (temperature - 25) * 0.6,
+                40,
+                70);
 
-        double humidity = 59
-                + Math.sin(phase * 0.34 + 1.5) * 5.4
-                + Math.cos(phase * 0.12 + seed % 9) * 1.7
-                - handoffPulse * 1.0
-                + routeDrift * 1.4;
+        double light = clamp(
+                10
+                        + Math.sin(phase * Math.PI * 2 + 0.7 + seed % 9) * 1.7
+                        + Math.cos(slowPhase * Math.PI * 4 + seed % 3) * 0.8,
+                7,
+                13);
 
-        double lightExposure = smoothCyclicPulse((minutes + seed) % 300, 286, 300, 4.2);
-        double ambientLeak = Math.max(0, Math.sin(phase * 0.72 + seed % 5)) * 0.9;
-        double light = 2.8 + ambientLeak + doorOpenPulse * 2.4 + lightExposure * 4.8;
-
-        long batteryElapsedMinutes = Math.min(Math.max(minutes, 0), 30L * 24 * 60);
         int batteryLevel = (int) Math.round(clamp(
-                96 - (batteryElapsedMinutes / 60.0) * 0.08 - (seed % 7) + Math.sin(phase * 0.18) * 1.2,
-                34,
-                99));
-        boolean signalStatus = (minutes + seed) % 113 != 0;
+                84
+                        + Math.sin(slowPhase * Math.PI * 2 + seed % 17) * 8
+                        + Math.cos(phase * Math.PI * 2) * 2,
+                65,
+                98));
 
         return new SimulatedTelemetry(
                 round(temperature),
                 round(humidity),
                 round(light),
                 batteryLevel,
-                signalStatus
+                true
         );
     }
 
@@ -85,12 +88,6 @@ public class DeviceSimulationService {
 
     private double roundCoordinate(double value) {
         return Math.round(value * 100000.0) / 100000.0;
-    }
-
-    private double smoothCyclicPulse(double value, double center, double period, double width) {
-        double directDistance = Math.abs(value - center);
-        double distance = Math.min(directDistance, period - directDistance);
-        return Math.exp(-(distance * distance) / (2 * width * width));
     }
 
     private double clamp(double value, double min, double max) {

@@ -22,8 +22,4 @@ public class ThresholdRequest {
     @NotNull(message = "光照上限不能为空")
     @Positive(message = "光照上限必须大于 0")
     private Double lightMax;
-
-    @NotNull(message = "失效时长不能为空")
-    @Positive(message = "失效时长必须大于 0")
-    private Integer durationLimitHours;
 }

@@ -171,9 +171,10 @@ public class DeviceController {
     public ApiResponse<HistoryResponse> history(
             @RequestHeader("Authorization") String authorization,
             @PathVariable Long deviceId,
-            @RequestParam(required = false) Integer hours) {
+            @RequestParam(required = false) Integer hours,
+            @RequestParam(required = false) Integer stepMinutes) {
         UserAccount user = authService.requireUser(authorization);
-        return ApiResponse.ok(deviceService.getHistory(user, deviceId, hours));
+        return ApiResponse.ok(deviceService.getHistory(user, deviceId, hours, stepMinutes));
     }
 
     @GetMapping("/{deviceId}/location")

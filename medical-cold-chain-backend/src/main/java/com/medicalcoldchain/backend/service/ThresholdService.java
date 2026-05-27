@@ -2,16 +2,17 @@ package com.medicalcoldchain.backend.service;
 
 import com.medicalcoldchain.backend.dto.device.ThresholdRequest;
 import com.medicalcoldchain.backend.dto.device.ThresholdResponse;
-import com.medicalcoldchain.backend.entity.DeviceThreshold;
+import com.medicalcoldchain.backend.entity.DeviceBorrowRecord;
 import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.exception.BusinessException;
-import com.medicalcoldchain.backend.repository.DeviceThresholdRepository;
+import com.medicalcoldchain.backend.repository.DeviceBorrowRecordRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,62 +21,49 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ThresholdService {
 
-    private static final double DEFAULT_TEMP_MIN = 3D;
-    private static final double DEFAULT_TEMP_MAX = 7D;
-    private static final double DEFAULT_HUMIDITY_MIN = 45D;
-    private static final double DEFAULT_HUMIDITY_MAX = 70D;
-    private static final double DEFAULT_LIGHT_MAX = 9D;
-    private static final int DEFAULT_DURATION_LIMIT_HOURS = 8;
-
-    private final DeviceThresholdRepository deviceThresholdRepository;
+    private final DeviceBorrowRecordRepository deviceBorrowRecordRepository;
     private final TransportDeviceRepository transportDeviceRepository;
 
     @Transactional
-    public DeviceThreshold ensureThreshold(UserAccount user, TransportDevice device) {
-        return deviceThresholdRepository.findByUserIdAndDeviceId(user.getId(), device.getId())
-                .orElseGet(() -> deviceThresholdRepository.save(DeviceThreshold.builder()
-                        .user(user)
+    public DeviceBorrowRecord ensureThreshold(UserAccount user, TransportDevice device) {
+        return deviceBorrowRecordRepository
+                .findTopByDeviceIdAndBorrowerIdAndReturnTimeIsNullOrderByBorrowTimeDesc(device.getId(), user.getId())
+                .orElseGet(() -> deviceBorrowRecordRepository.save(DeviceBorrowRecord.builder()
                         .device(device)
-                        .tempMin(DEFAULT_TEMP_MIN)
-                        .tempMax(DEFAULT_TEMP_MAX)
-                        .humidityMin(DEFAULT_HUMIDITY_MIN)
-                        .humidityMax(DEFAULT_HUMIDITY_MAX)
-                        .lightMax(DEFAULT_LIGHT_MAX)
-                        .durationLimitHours(DEFAULT_DURATION_LIMIT_HOURS)
+                        .borrower(user)
+                        .borrowTime(device.getBorrowedAt() == null ? LocalDateTime.now() : device.getBorrowedAt())
                         .build()));
     }
 
     @Transactional
     public ThresholdResponse getThreshold(UserAccount user, Long deviceId) {
         TransportDevice device = getOwnedDevice(user, deviceId);
-        return toResponse(deviceThresholdRepository.findByUserIdAndDeviceId(user.getId(), device.getId())
-                .orElseGet(() -> ensureThreshold(user, device)));
+        return toResponse(ensureThreshold(user, device));
     }
 
     @Transactional
     public ThresholdResponse saveThreshold(UserAccount user, Long deviceId, ThresholdRequest request) {
         validateRequest(request);
         TransportDevice device = getOwnedDevice(user, deviceId);
-        DeviceThreshold threshold = ensureThreshold(user, device);
+        DeviceBorrowRecord threshold = ensureThreshold(user, device);
         threshold.setTempMin(request.getTempMin());
         threshold.setTempMax(request.getTempMax());
         threshold.setHumidityMin(request.getHumidityMin());
         threshold.setHumidityMax(request.getHumidityMax());
         threshold.setLightMax(request.getLightMax());
-        threshold.setDurationLimitHours(request.getDurationLimitHours());
-        return toResponse(deviceThresholdRepository.save(threshold));
+        return toResponse(deviceBorrowRecordRepository.save(threshold));
     }
 
     @Transactional
-    public Map<Long, DeviceThreshold> getThresholdMap(UserAccount user, List<TransportDevice> devices) {
-        Map<Long, DeviceThreshold> thresholdMap = new HashMap<>();
+    public Map<Long, DeviceBorrowRecord> getThresholdMap(UserAccount user, List<TransportDevice> devices) {
+        Map<Long, DeviceBorrowRecord> thresholdMap = new HashMap<>();
         if (devices.isEmpty()) {
             return thresholdMap;
         }
 
         List<Long> deviceIds = devices.stream().map(TransportDevice::getId).toList();
-        deviceThresholdRepository.findByUserIdAndDeviceIdIn(user.getId(), deviceIds)
-                .forEach(threshold -> thresholdMap.put(threshold.getDevice().getId(), threshold));
+        deviceBorrowRecordRepository.findByBorrowerIdAndReturnTimeIsNullAndDevice_IdIn(user.getId(), deviceIds)
+                .forEach(record -> thresholdMap.put(record.getDevice().getId(), record));
 
         for (TransportDevice device : devices) {
             thresholdMap.computeIfAbsent(device.getId(), key -> ensureThreshold(user, device));
@@ -83,7 +71,7 @@ public class ThresholdService {
         return thresholdMap;
     }
 
-    public ThresholdResponse toResponse(DeviceThreshold threshold) {
+    public ThresholdResponse toResponse(DeviceBorrowRecord threshold) {
         return ThresholdResponse.builder()
                 .id(threshold.getId())
                 .deviceId(threshold.getDevice().getId())
@@ -92,7 +80,6 @@ public class ThresholdService {
                 .humidityMin(threshold.getHumidityMin())
                 .humidityMax(threshold.getHumidityMax())
                 .lightMax(threshold.getLightMax())
-                .durationLimitHours(threshold.getDurationLimitHours())
                 .build();
     }
 

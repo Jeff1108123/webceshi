@@ -9,7 +9,7 @@ import java.util.Optional;
 
 public interface TelemetryRecordRepository extends JpaRepository<TelemetryRecord, Long> {
 
-    Optional<TelemetryRecord> findTopByDeviceIdOrderByRecordedAtDesc(Long deviceId);
+    Optional<TelemetryRecord> findTopByDeviceIdOrderByRecordedAtDescIdDesc(Long deviceId);
 
     List<TelemetryRecord> findByDeviceIdAndRecordedAtBetweenOrderByRecordedAtAsc(
             Long deviceId, LocalDateTime start, LocalDateTime end);

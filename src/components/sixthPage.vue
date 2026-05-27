@@ -17,7 +17,7 @@
         <div class="toolbar-group toolbar-meta">
           <div class="status-copy">
             <strong>{{ dataCurrentAt ? `数据更新到：${formatDateTime(dataCurrentAt)}` : '等待加载历史数据' }}</strong>
-            <small>{{ loadedAt ? `页面刷新时间：${loadedAt}` : '点击刷新可拉取当前时间范围内的最新历史数据' }}</small>
+            <small>{{ loadedAt ? `页面刷新时间：${loadedAt} · 后端粒度：${displayGranularityMinutes}分钟/点` : '点击刷新可拉取当前时间范围内的最新历史数据' }}</small>
           </div>
           <button :disabled="!selectedDeviceId || loading" @click="loadHistory">{{ loading ? '加载中...' : '刷新到当前时间' }}</button>
         </div>
@@ -178,11 +178,26 @@ export default {
       }
       return granularityMap[this.hours] || 15
     },
-    displayGranularityMinutes() {
+    requestedGranularityMinutes() {
       return this.manualGranularityMinutes || this.defaultGranularityMinutes
     },
+    displayGranularityMinutes() {
+      const backendStepMinutes = this.historyData ? this.normalizeFiniteNumber(this.historyData.stepMinutes) : null
+      return backendStepMinutes || this.requestedGranularityMinutes
+    },
     aggregatedMetricPoints() {
-      return this.aggregateMetricPoints(this.activeMetricConfig, this.displayGranularityMinutes)
+      const metric = this.activeMetricConfig
+      if (!metric || !metric.field) return []
+      return this.points
+        .map(point => {
+          const value = this.normalizeFiniteNumber(point[metric.field])
+          return {
+            ...point,
+            label: formatMonthDayTime(point.recordedAt),
+            value
+          }
+        })
+        .filter(point => Number.isFinite(point.value))
     },
     dataCurrentAt() {
       return this.latestSnapshot ? this.latestSnapshot.recordedAt : ''
@@ -325,94 +340,30 @@ export default {
         this.activeMetric = metric
       }
     },
-    handleDensityChange(direction) {
+    async handleDensityChange(direction) {
       const currentIndex = this.granularityOptions.indexOf(this.displayGranularityMinutes)
       if (currentIndex === -1) return
 
       const offset = direction === 'denser' ? -1 : 1
       const nextIndex = Math.max(0, Math.min(this.granularityOptions.length - 1, currentIndex + offset))
-      this.manualGranularityMinutes = this.granularityOptions[nextIndex]
-    },
-    aggregateMetricPoints(metric, granularityMinutes) {
-      if (!metric || !metric.field || !this.points.length) return []
+      const nextGranularityMinutes = this.granularityOptions[nextIndex]
+      if (nextGranularityMinutes === this.requestedGranularityMinutes) return
 
-      const bucketMs = Math.max(Number(granularityMinutes) || this.defaultGranularityMinutes, 1) * 60 * 1000
-      const sortedPoints = this.points
-        .map(point => ({
-          ...point,
-          timestamp: new Date(point.recordedAt).getTime()
-        }))
-        .filter(point => Number.isFinite(point.timestamp))
-        .sort((left, right) => left.timestamp - right.timestamp)
-
-      if (!sortedPoints.length) return []
-
-      const firstTimestamp = sortedPoints[0].timestamp
-      const buckets = []
-      const bucketMap = new Map()
-
-      sortedPoints.forEach(point => {
-        const rawValue = this.normalizeFiniteNumber(point[metric.field])
-        const bucketStart = firstTimestamp + Math.floor((point.timestamp - firstTimestamp) / bucketMs) * bucketMs
-        let bucket = bucketMap.get(bucketStart)
-
-        if (!bucket) {
-          bucket = {
-            bucketStart,
-            lastRecordedAt: null,
-            sum: 0,
-            count: 0,
-            alarm: false
-          }
-          bucketMap.set(bucketStart, bucket)
-          buckets.push(bucket)
-        }
-
-        if (Number.isFinite(rawValue)) {
-          bucket.lastRecordedAt = point.recordedAt
-          bucket.sum += rawValue
-          bucket.count += 1
-        }
-        if (this.isMetricPointAlarm(point, metric)) {
-          bucket.alarm = true
-        }
-      })
-
-      return buckets
-        .filter(bucket => bucket.count > 0)
-        .map(bucket => {
-          const value = Number((bucket.sum / bucket.count).toFixed(2))
-          return {
-            recordedAt: bucket.lastRecordedAt,
-            label: formatMonthDayTime(bucket.lastRecordedAt),
-            bucketStart: new Date(bucket.bucketStart).toISOString(),
-            value,
-            [metric.field]: value,
-            alarm: bucket.alarm
-          }
-        })
+      this.manualGranularityMinutes = nextGranularityMinutes
+      if (this.selectedDeviceId) {
+        await this.loadHistory()
+      }
     },
     normalizeFiniteNumber(value) {
       if (value === null || value === undefined || value === '') return null
       const normalizedValue = Number(value)
       return Number.isFinite(normalizedValue) ? normalizedValue : null
     },
-    isMetricPointAlarm(point, metric) {
-      const value = this.normalizeFiniteNumber(point[metric.field])
-      if (!Number.isFinite(value)) return false
-
-      const min = this.normalizeFiniteNumber(metric.thresholdMin)
-      const max = this.normalizeFiniteNumber(metric.thresholdMax)
-
-      if (Number.isFinite(min) && value < min) return true
-      if (Number.isFinite(max) && value > max) return true
-      return false
-    },
     async loadHistory() {
       if (!this.selectedDeviceId) return
       this.loading = true
       try {
-        this.historyData = await fetchHistory(this.selectedDeviceId, this.hours)
+        this.historyData = await fetchHistory(this.selectedDeviceId, this.hours, this.requestedGranularityMinutes)
         this.loadedAt = formatDateTime()
         if (!['temperature', 'humidity', 'light'].includes(this.activeMetric)) {
           this.activeMetric = 'temperature'

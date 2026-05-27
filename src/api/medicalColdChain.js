@@ -51,9 +51,9 @@ export function fetchMonitor(deviceId) {
   return request.get(`/devices/${deviceId}/monitor`)
 }
 
-export function fetchHistory(deviceId, hours) {
+export function fetchHistory(deviceId, hours, stepMinutes) {
   return request.get(`/devices/${deviceId}/history`, {
-    params: { hours }
+    params: { hours, stepMinutes }
   })
 }
 

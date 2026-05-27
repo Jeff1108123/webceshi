@@ -30,6 +30,7 @@
               <th>手机号</th>
               <th>借用时间</th>
               <th>归还时间</th>
+              <th>当前阈值</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
@@ -46,6 +47,14 @@
               <td>{{ item.borrowerPhone || '--' }}</td>
               <td>{{ formatDateTime(item.borrowTime) }}</td>
               <td>{{ formatDateTime(item.returnTime) }}</td>
+              <td>
+                <div v-if="item.threshold" class="threshold-cell">
+                  <span>温度 {{ formatRange(item.threshold.tempMin, item.threshold.tempMax, '°C') }}</span>
+                  <span>湿度 {{ formatRange(item.threshold.humidityMin, item.threshold.humidityMax, '%') }}</span>
+                  <span>光照 ≤{{ formatValue(item.threshold.lightMax, 'Lux') }}</span>
+                </div>
+                <span v-else class="muted">--</span>
+              </td>
               <td>
                 <span :class="['status', { returned: item.status === 'RETURNED' }]">
                   {{ statusLabel(item.status) }}
@@ -75,6 +84,24 @@ import AppShell from './common/AppShell.vue'
 import { fetchAllDeviceBorrows, forceReturnDevices } from '../api/medicalColdChain'
 import { formatDateTime as formatDateTimeValue } from '../utils/dateTime'
 
+function normalizeThreshold(raw = {}) {
+  const threshold = raw.threshold || raw
+  const hasThreshold = ['tempMin', 'tempMax', 'humidityMin', 'humidityMax', 'lightMax']
+    .some(key => threshold[key] !== undefined && threshold[key] !== null)
+
+  if (!hasThreshold) {
+    return null
+  }
+
+  return {
+    tempMin: threshold.tempMin,
+    tempMax: threshold.tempMax,
+    humidityMin: threshold.humidityMin,
+    humidityMax: threshold.humidityMax,
+    lightMax: threshold.lightMax
+  }
+}
+
 function normalizeRecord(raw = {}, index) {
   return {
     recordId: raw.recordId || raw.id || `${raw.deviceId || 'device'}-${index}`,
@@ -87,6 +114,7 @@ function normalizeRecord(raw = {}, index) {
     borrowerPhone: raw.borrowerPhone || raw.userPhone || '',
     borrowTime: raw.borrowTime || raw.borrowedAt || '',
     returnTime: raw.returnTime || raw.returnedAt || '',
+    threshold: normalizeThreshold(raw),
     status: String(raw.status || ((raw.returnTime || raw.returnedAt) ? 'RETURNED' : 'BORROWED')).toUpperCase()
   }
 }
@@ -115,6 +143,18 @@ export default {
     },
     formatDateTime(value) {
       return formatDateTimeValue(value) || '--'
+    },
+    formatValue(value, unit = '') {
+      if (value === null || value === undefined || value === '') {
+        return '--'
+      }
+      return `${value}${unit}`
+    },
+    formatRange(min, max, unit = '') {
+      if (min === null || min === undefined || min === '' || max === null || max === undefined || max === '') {
+        return '--'
+      }
+      return `${min}~${max}${unit}`
     },
     async loadRecords() {
       this.loading = true
@@ -221,7 +261,7 @@ button:hover:not(:disabled) {
 
 table {
   width: 100%;
-  min-width: 1100px;
+  min-width: 1320px;
   border-collapse: collapse;
   color: var(--text-main);
 }
@@ -255,6 +295,19 @@ td strong {
 td span {
   margin-top: 4px;
   color: var(--text-muted);
+}
+
+.threshold-cell {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  min-width: 210px;
+}
+
+.threshold-cell span {
+  margin-top: 0;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .status {

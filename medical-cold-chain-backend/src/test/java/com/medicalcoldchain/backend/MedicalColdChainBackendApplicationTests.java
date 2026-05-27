@@ -10,11 +10,15 @@ import com.medicalcoldchain.backend.dto.auth.SendCodeResponse;
 import com.medicalcoldchain.backend.dto.device.ApplyDeviceRequest;
 import com.medicalcoldchain.backend.dto.device.DeviceBorrowRecordResponse;
 import com.medicalcoldchain.backend.dto.device.ThresholdResponse;
+import com.medicalcoldchain.backend.dto.telemetry.HistoryResponse;
 import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
+import com.medicalcoldchain.backend.entity.TelemetryRecord;
+import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.enums.UserRole;
 import com.medicalcoldchain.backend.exception.BusinessException;
 import com.medicalcoldchain.backend.repository.DeviceBorrowRecordRepository;
+import com.medicalcoldchain.backend.repository.TelemetryRecordRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import com.medicalcoldchain.backend.repository.UserAccountRepository;
 import com.medicalcoldchain.backend.service.AuthService;
@@ -51,6 +55,9 @@ class MedicalColdChainBackendApplicationTests {
 
     @Autowired
     private TransportDeviceRepository transportDeviceRepository;
+
+    @Autowired
+    private TelemetryRecordRepository telemetryRecordRepository;
 
     @Autowired
     private DeviceBorrowRecordRepository deviceBorrowRecordRepository;
@@ -102,10 +109,15 @@ class MedicalColdChainBackendApplicationTests {
 
         List<DeviceBorrowRecordResponse> records = deviceService.listBorrowRecords(null, "BORROWED");
         assertFalse(records.isEmpty());
-        assertTrue(records.stream().anyMatch(record ->
-                dispatcher.getPhone().equals(record.getBorrowerPhone())
-                        && "BORROWED".equals(record.getStatus())
-                        && record.getBorrowTime() != null));
+        DeviceBorrowRecordResponse dispatcherRecord = records.stream()
+                .filter(record -> dispatcher.getPhone().equals(record.getBorrowerPhone()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("BORROWED", dispatcherRecord.getStatus());
+        assertNotNull(dispatcherRecord.getBorrowTime());
+        assertNotNull(dispatcherRecord.getThreshold());
+        assertEquals(20D, dispatcherRecord.getThreshold().getTempMin());
+        assertEquals(30D, dispatcherRecord.getThreshold().getTempMax());
     }
 
     @Test
@@ -269,68 +281,36 @@ class MedicalColdChainBackendApplicationTests {
 
         for (String deviceCode : deviceCodes) {
             DeviceSimulationService.SimulatedTelemetry previous = deviceSimulationService.simulateTelemetry(deviceCode, start);
-            int failedSignalCount = previous.signalStatus() ? 0 : 1;
-            int temperatureAlarmCount = isTemperatureAlarm(previous) ? 1 : 0;
-            int humidityAlarmCount = isHumidityAlarm(previous) ? 1 : 0;
-            int lightAlarmCount = isLightAlarm(previous) ? 1 : 0;
-            int alarmCount = isAlarm(previous) ? 1 : 0;
-            int sampleCount = 1;
 
-            assertTrue(previous.temperature() >= 0.5 && previous.temperature() <= 10.5,
-                    "temperature out of realistic cold-chain range at minute 0 for " + deviceCode + ": " + previous.temperature());
-            assertTrue(previous.humidity() >= 42 && previous.humidity() <= 76,
-                    "humidity out of realistic cold-chain range at minute 0 for " + deviceCode + ": " + previous.humidity());
-            assertTrue(previous.light() >= 0 && previous.light() <= 18,
-                    "light out of realistic cold-chain range at minute 0 for " + deviceCode + ": " + previous.light());
+            assertTrue(previous.temperature() >= 20 && previous.temperature() <= 30,
+                    "temperature out of expected range at minute 0 for " + deviceCode + ": " + previous.temperature());
+            assertTrue(previous.humidity() >= 40 && previous.humidity() <= 70,
+                    "humidity out of expected range at minute 0 for " + deviceCode + ": " + previous.humidity());
+            assertTrue(previous.light() >= 7 && previous.light() <= 13,
+                    "light out of expected range at minute 0 for " + deviceCode + ": " + previous.light());
+            assertTrue(previous.signalStatus(), "simulated signal should stay normal for " + deviceCode);
 
             for (int minute = 1; minute <= 6 * 60; minute++) {
                 DeviceSimulationService.SimulatedTelemetry current = deviceSimulationService
                         .simulateTelemetry(deviceCode, start.plusMinutes(minute));
-                sampleCount++;
-                if (!current.signalStatus()) {
-                    failedSignalCount++;
-                }
-                if (isTemperatureAlarm(current)) {
-                    temperatureAlarmCount++;
-                }
-                if (isHumidityAlarm(current)) {
-                    humidityAlarmCount++;
-                }
-                if (isLightAlarm(current)) {
-                    lightAlarmCount++;
-                }
-                if (isAlarm(current)) {
-                    alarmCount++;
-                }
 
-                assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.9,
+                assertTrue(Math.abs(current.temperature() - previous.temperature()) <= 0.25,
                         "temperature jumped at minute " + minute + " for " + deviceCode);
-                assertTrue(Math.abs(current.humidity() - previous.humidity()) <= 0.9,
+                assertTrue(Math.abs(current.humidity() - previous.humidity()) <= 0.4,
                         "humidity jumped at minute " + minute + " for " + deviceCode);
-                assertTrue(Math.abs(current.light() - previous.light()) <= 1.6,
+                assertTrue(Math.abs(current.light() - previous.light()) <= 0.25,
                         "light jumped at minute " + minute + " for " + deviceCode);
 
-                assertTrue(current.temperature() >= 0.5 && current.temperature() <= 10.5,
-                        "temperature out of realistic cold-chain range at minute " + minute + " for " + deviceCode + ": " + current.temperature());
-                assertTrue(current.humidity() >= 42 && current.humidity() <= 76,
-                        "humidity out of realistic cold-chain range at minute " + minute + " for " + deviceCode + ": " + current.humidity());
-                assertTrue(current.light() >= 0 && current.light() <= 18,
-                        "light out of realistic cold-chain range at minute " + minute + " for " + deviceCode + ": " + current.light());
+                assertTrue(current.temperature() >= 20 && current.temperature() <= 30,
+                        "temperature out of expected range at minute " + minute + " for " + deviceCode + ": " + current.temperature());
+                assertTrue(current.humidity() >= 40 && current.humidity() <= 70,
+                        "humidity out of expected range at minute " + minute + " for " + deviceCode + ": " + current.humidity());
+                assertTrue(current.light() >= 7 && current.light() <= 13,
+                        "light out of expected range at minute " + minute + " for " + deviceCode + ": " + current.light());
+                assertTrue(current.signalStatus(), "simulated signal should stay normal for " + deviceCode);
 
                 previous = current;
             }
-
-            assertTrue(failedSignalCount > 0, "expected occasional simulated signal failures for " + deviceCode);
-            assertTrue(failedSignalCount < sampleCount * 0.10,
-                    "signal failures should remain sparse for " + deviceCode + ", but got " + failedSignalCount + " of " + sampleCount);
-            assertTrue(temperatureAlarmCount < sampleCount * 0.08,
-                    "temperature alarms should remain uncommon for " + deviceCode + ", but got " + temperatureAlarmCount + " of " + sampleCount);
-            assertTrue(humidityAlarmCount < sampleCount * 0.08,
-                    "humidity alarms should remain uncommon for " + deviceCode + ", but got " + humidityAlarmCount + " of " + sampleCount);
-            assertTrue(lightAlarmCount < sampleCount * 0.06,
-                    "light alarms should remain uncommon for " + deviceCode + ", but got " + lightAlarmCount + " of " + sampleCount);
-            assertTrue(alarmCount < sampleCount * 0.12,
-                    "overall alarm moments should remain uncommon for " + deviceCode + ", but got " + alarmCount + " of " + sampleCount);
         }
     }
 
@@ -371,18 +351,79 @@ class MedicalColdChainBackendApplicationTests {
     }
 
     @Test
-    void newDeviceThresholdShouldUseNarrowDefaultRange() {
+    void newBorrowRecordThresholdShouldUseDefaultRange() {
         UserAccount dispatcher = createBorrowLimitTestUser("128", "默认阈值测试调度员");
 
         deviceService.applyDevices(dispatcher, applyRequest(1));
         Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
         ThresholdResponse threshold = deviceService.getThreshold(dispatcher, deviceId);
+        var borrowRecord = deviceBorrowRecordRepository
+                .findTopByDeviceIdAndBorrowerIdAndReturnTimeIsNullOrderByBorrowTimeDesc(deviceId, dispatcher.getId())
+                .orElseThrow();
 
-        assertEquals(3D, threshold.getTempMin());
-        assertEquals(7D, threshold.getTempMax());
-        assertEquals(45D, threshold.getHumidityMin());
+        assertEquals(borrowRecord.getId(), threshold.getId());
+        assertEquals(20D, threshold.getTempMin());
+        assertEquals(30D, threshold.getTempMax());
+        assertEquals(40D, threshold.getHumidityMin());
         assertEquals(70D, threshold.getHumidityMax());
-        assertEquals(9D, threshold.getLightMax());
+        assertEquals(13D, threshold.getLightMax());
+        assertEquals(threshold.getTempMin(), borrowRecord.getTempMin());
+        assertEquals(threshold.getTempMax(), borrowRecord.getTempMax());
+    }
+
+    @Test
+    void historyShouldReturnBackendAggregatedPointsForRequestedStep() {
+        UserAccount dispatcher = createBorrowLimitTestUser("124", "历史密度测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
+
+        HistoryResponse history = deviceService.getHistory(dispatcher, deviceId, 24, 15);
+
+        assertEquals(24, history.getHours());
+        assertEquals(15, history.getStepMinutes());
+        assertNotNull(history.getPoints());
+        assertFalse(history.getPoints().isEmpty());
+        assertTrue(history.getPoints().size() < 24 * 60);
+        assertTrue(history.getPoints().size() <= 24 * 4 + 2);
+    }
+
+    @Test
+    void manualTelemetryRecordShouldBeVisibleInLatestMonitorAndHistory() {
+        UserAccount dispatcher = createBorrowLimitTestUser("123", "手动实时数据测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
+        TransportDevice device = transportDeviceRepository.findById(deviceId).orElseThrow();
+        LocalDateTime manualRecordedAt = LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+
+        telemetryRecordRepository.save(TelemetryRecord.builder()
+                .device(device)
+                .temperature(2.34)
+                .humidity(66.7)
+                .light(12.5)
+                .batteryLevel(88)
+                .signalStatus(false)
+                .recordedAt(manualRecordedAt)
+                .build());
+
+        LatestDeviceTelemetryResponse latest = deviceService.getLatestTelemetry(dispatcher).get(0);
+        assertEquals(manualRecordedAt, latest.getTelemetry().getRecordedAt());
+        assertEquals(2.34, latest.getTelemetry().getTemperature());
+        assertEquals(66.7, latest.getTelemetry().getHumidity());
+        assertEquals(12.5, latest.getTelemetry().getLight());
+        assertEquals(88, latest.getTelemetry().getBatteryLevel());
+        assertFalse(latest.getTelemetry().getSignalStatus());
+
+        LatestDeviceTelemetryResponse monitor = deviceService.getMonitorTelemetry(dispatcher, deviceId);
+        assertEquals(manualRecordedAt, monitor.getTelemetry().getRecordedAt());
+        assertEquals(2.34, monitor.getTelemetry().getTemperature());
+
+        HistoryResponse history = deviceService.getHistory(dispatcher, deviceId, 1, 1);
+        assertTrue(history.getPoints().stream().anyMatch(point -> manualRecordedAt.equals(point.getRecordedAt())
+                && Double.valueOf(2.34).equals(point.getTemperature())
+                && Double.valueOf(66.7).equals(point.getHumidity())
+                && Double.valueOf(12.5).equals(point.getLight())
+                && Integer.valueOf(88).equals(point.getBatteryLevel())
+                && Boolean.FALSE.equals(point.getSignalStatus())));
     }
 
     @Test
@@ -440,25 +481,6 @@ class MedicalColdChainBackendApplicationTests {
         assertEquals("该用户仍有在用设备，请先强制归还后再删除", exception.getMessage());
         assertTrue(userAccountRepository.existsById(dispatcher.getId()));
         assertEquals(1, transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(dispatcher.getId()).size());
-    }
-
-    private boolean isAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
-        return isTemperatureAlarm(telemetry)
-                || isHumidityAlarm(telemetry)
-                || isLightAlarm(telemetry)
-                || !telemetry.signalStatus();
-    }
-
-    private boolean isTemperatureAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
-        return telemetry.temperature() < 3 || telemetry.temperature() > 7;
-    }
-
-    private boolean isHumidityAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
-        return telemetry.humidity() < 45 || telemetry.humidity() > 70;
-    }
-
-    private boolean isLightAlarm(DeviceSimulationService.SimulatedTelemetry telemetry) {
-        return telemetry.light() > 9;
     }
 
     private double roundToTwoDecimals(double value) {

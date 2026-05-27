@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS device_borrow_record (
   device_id BIGINT NOT NULL,
   borrower_id BIGINT NOT NULL,
   borrow_time DATETIME NOT NULL,
+  temp_min DOUBLE NOT NULL DEFAULT 20,
+  temp_max DOUBLE NOT NULL DEFAULT 30,
+  humidity_min DOUBLE NOT NULL DEFAULT 40,
+  humidity_max DOUBLE NOT NULL DEFAULT 70,
+  light_max DOUBLE NOT NULL DEFAULT 13,
   return_time DATETIME NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
@@ -64,25 +69,6 @@ CREATE TABLE IF NOT EXISTS device_borrow_record (
     FOREIGN KEY (borrower_id) REFERENCES user_account(id),
   INDEX idx_borrow_record_device_time (device_id, borrow_time),
   INDEX idx_borrow_record_user_time (borrower_id, borrow_time)
-);
-
-CREATE TABLE IF NOT EXISTS device_threshold (
-  id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  user_id BIGINT NOT NULL,
-  device_id BIGINT NOT NULL,
-  temp_min DOUBLE NOT NULL,
-  temp_max DOUBLE NOT NULL,
-  humidity_min DOUBLE NOT NULL,
-  humidity_max DOUBLE NOT NULL,
-  light_max DOUBLE NOT NULL,
-  duration_limit_hours INT NOT NULL,
-  created_at DATETIME NOT NULL,
-  updated_at DATETIME NOT NULL,
-  CONSTRAINT uk_threshold_user_device UNIQUE (user_id, device_id),
-  CONSTRAINT fk_device_threshold_user
-    FOREIGN KEY (user_id) REFERENCES user_account(id),
-  CONSTRAINT fk_device_threshold_device
-    FOREIGN KEY (device_id) REFERENCES transport_device(id)
 );
 
 CREATE TABLE IF NOT EXISTS telemetry_record (
@@ -126,3 +112,42 @@ WHERE NOT EXISTS (
 
 ALTER TABLE transport_device
   ADD COLUMN IF NOT EXISTS borrowed_at DATETIME NULL;
+
+ALTER TABLE device_borrow_record
+  ADD COLUMN IF NOT EXISTS temp_min DOUBLE NOT NULL DEFAULT 20;
+
+ALTER TABLE device_borrow_record
+  ADD COLUMN IF NOT EXISTS temp_max DOUBLE NOT NULL DEFAULT 30;
+
+ALTER TABLE device_borrow_record
+  ADD COLUMN IF NOT EXISTS humidity_min DOUBLE NOT NULL DEFAULT 40;
+
+ALTER TABLE device_borrow_record
+  ADD COLUMN IF NOT EXISTS humidity_max DOUBLE NOT NULL DEFAULT 70;
+
+ALTER TABLE device_borrow_record
+  ADD COLUMN IF NOT EXISTS light_max DOUBLE NOT NULL DEFAULT 13;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN temp_min DOUBLE NOT NULL DEFAULT 20;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN temp_max DOUBLE NOT NULL DEFAULT 30;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN humidity_min DOUBLE NOT NULL DEFAULT 40;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN humidity_max DOUBLE NOT NULL DEFAULT 70;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN light_max DOUBLE NOT NULL DEFAULT 13;
+
+UPDATE device_borrow_record
+SET temp_min = 20, temp_max = 30, humidity_min = 40, humidity_max = 70, light_max = 13
+WHERE temp_min = 3 AND temp_max = 7 AND humidity_min = 45 AND humidity_max = 70 AND light_max = 9;
+
+ALTER TABLE device_borrow_record
+  DROP COLUMN IF EXISTS duration_limit_hours;
+
+DROP TABLE IF EXISTS device_threshold;

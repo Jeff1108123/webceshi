@@ -2,8 +2,8 @@ package com.medicalcoldchain.backend.service;
 
 import com.medicalcoldchain.backend.dto.location.DeviceLocationResponse;
 import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
+import com.medicalcoldchain.backend.entity.DeviceBorrowRecord;
 import com.medicalcoldchain.backend.entity.DeviceLocation;
-import com.medicalcoldchain.backend.entity.DeviceThreshold;
 import com.medicalcoldchain.backend.entity.TelemetryRecord;
 import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.repository.DeviceLocationRepository;
@@ -22,7 +22,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TelemetryService {
 
-    private static final int HISTORY_STEP_MINUTES = 1;
+    private static final int HISTORY_GENERATION_STEP_MINUTES = 5;
+    private static final int HISTORY_RESPONSE_MIN_STEP_MINUTES = 1;
     private static final int HISTORY_WINDOW_HOURS = 24;
 
     private final TelemetryRecordRepository telemetryRecordRepository;
@@ -31,17 +32,12 @@ public class TelemetryService {
     private final DeviceSimulationService deviceSimulationService;
 
     @Transactional
-    public void ensureDemoHistory(TransportDevice device) {
-        ensureTimeline(device, LocalDateTime.now());
-    }
-
-    @Transactional
     public void generateBorrowHistory(TransportDevice device, LocalDateTime borrowTime) {
-        LocalDateTime endTime = alignTime(LocalDateTime.now(), HISTORY_STEP_MINUTES);
-        LocalDateTime startTime = alignTime(endTime.minusHours(HISTORY_WINDOW_HOURS), HISTORY_STEP_MINUTES);
+        LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime startTime = endTime.minusHours(HISTORY_WINDOW_HOURS);
         telemetryRecordRepository.deleteByDeviceIdAndRecordedAtGreaterThanEqual(device.getId(), startTime);
         deviceLocationRepository.deleteByDeviceIdAndRecordedAtGreaterThanEqual(device.getId(), startTime);
-        saveTimeline(device, startTime, endTime, HISTORY_STEP_MINUTES);
+        saveTimeline(device, startTime, endTime, HISTORY_GENERATION_STEP_MINUTES);
     }
 
     @Transactional
@@ -52,9 +48,11 @@ public class TelemetryService {
 
     @Transactional
     public LatestSnapshot getLatestSnapshot(TransportDevice device) {
-        ensureTimeline(device, LocalDateTime.now());
-        TelemetryRecord telemetry = telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDesc(device.getId()).orElse(null);
+        TelemetryRecord telemetry = telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDescIdDesc(device.getId()).orElse(null);
         DeviceLocation location = deviceLocationRepository.findTopByDeviceIdOrderByRecordedAtDesc(device.getId()).orElse(null);
+        if (telemetry != null) {
+            syncDeviceSnapshot(device, telemetry);
+        }
         return new LatestSnapshot(telemetry, location);
     }
 
@@ -70,14 +68,30 @@ public class TelemetryService {
 
     @Transactional
     public List<TelemetryRecord> getHistoryRecords(TransportDevice device, int hours) {
-        LocalDateTime end = alignTime(LocalDateTime.now(), HISTORY_STEP_MINUTES);
-        ensureTimeline(device, end);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime alignedEnd = now.truncatedTo(ChronoUnit.MINUTES);
         int cappedHours = Math.max(1, Math.min(hours, HISTORY_WINDOW_HOURS));
-        LocalDateTime start = end.minusHours(cappedHours);
-        return telemetryRecordRepository.findByDeviceIdAndRecordedAtBetweenOrderByRecordedAtAsc(device.getId(), start, end);
+        LocalDateTime start = alignedEnd.minusHours(cappedHours);
+        return telemetryRecordRepository.findByDeviceIdAndRecordedAtBetweenOrderByRecordedAtAsc(device.getId(), start, now);
     }
 
-    public boolean isAlarm(TelemetryRecord record, DeviceThreshold threshold) {
+    @Transactional
+    public List<TelemetryPointResponse> getHistoryPoints(
+            TransportDevice device,
+            int hours,
+            int stepMinutes,
+            DeviceBorrowRecord threshold) {
+        List<TelemetryRecord> records = getHistoryRecords(device, hours);
+        int safeStepMinutes = Math.max(HISTORY_RESPONSE_MIN_STEP_MINUTES, Math.min(stepMinutes, 60));
+        if (safeStepMinutes <= HISTORY_RESPONSE_MIN_STEP_MINUTES) {
+            return records.stream()
+                    .map(record -> toPointResponse(record, threshold))
+                    .toList();
+        }
+        return aggregateHistoryPoints(records, safeStepMinutes, threshold);
+    }
+
+    public boolean isAlarm(TelemetryRecord record, DeviceBorrowRecord threshold) {
         if (record == null || threshold == null) {
             return false;
         }
@@ -89,7 +103,7 @@ public class TelemetryService {
                 || record.getLight() > threshold.getLightMax();
     }
 
-    public TelemetryPointResponse toPointResponse(TelemetryRecord record, DeviceThreshold threshold) {
+    public TelemetryPointResponse toPointResponse(TelemetryRecord record, DeviceBorrowRecord threshold) {
         if (record == null) {
             return null;
         }
@@ -104,6 +118,36 @@ public class TelemetryService {
                 .build();
     }
 
+    private List<TelemetryPointResponse> aggregateHistoryPoints(
+            List<TelemetryRecord> records,
+            int stepMinutes,
+            DeviceBorrowRecord threshold) {
+        if (records.isEmpty()) {
+            return List.of();
+        }
+
+        List<TelemetryPointResponse> points = new ArrayList<>();
+        HistoryBucket bucket = null;
+        LocalDateTime bucketStart = null;
+
+        for (TelemetryRecord record : records) {
+            LocalDateTime recordBucketStart = alignTime(record.getRecordedAt(), stepMinutes);
+            if (bucket == null || !recordBucketStart.equals(bucketStart)) {
+                if (bucket != null) {
+                    points.add(bucket.toResponse());
+                }
+                bucketStart = recordBucketStart;
+                bucket = new HistoryBucket();
+            }
+            bucket.add(record, isAlarm(record, threshold));
+        }
+
+        if (bucket != null) {
+            points.add(bucket.toResponse());
+        }
+        return points;
+    }
+
     public DeviceLocationResponse toLocationResponse(DeviceLocation location) {
         if (location == null) {
             return null;
@@ -115,22 +159,6 @@ public class TelemetryService {
                 .city(location.getCity())
                 .address(location.getAddress())
                 .build();
-    }
-
-    private void ensureTimeline(TransportDevice device, LocalDateTime targetTime) {
-        LocalDateTime alignedTarget = alignTime(targetTime, HISTORY_STEP_MINUTES);
-        TelemetryRecord latest = telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDesc(device.getId()).orElse(null);
-
-        if (latest == null) {
-            LocalDateTime startTime = alignTime(alignedTarget.minusHours(HISTORY_WINDOW_HOURS), HISTORY_STEP_MINUTES);
-            saveTimeline(device, startTime, alignedTarget, HISTORY_STEP_MINUTES);
-            return;
-        }
-        if (!latest.getRecordedAt().isBefore(alignedTarget)) {
-            syncDeviceSnapshot(device, latest);
-            return;
-        }
-        saveTimeline(device, latest.getRecordedAt().plusMinutes(HISTORY_STEP_MINUTES), alignedTarget, HISTORY_STEP_MINUTES);
     }
 
     private void saveTimeline(TransportDevice device, LocalDateTime startTime, LocalDateTime endTime, int stepMinutes) {
@@ -182,6 +210,45 @@ public class TelemetryService {
     private LocalDateTime alignTime(LocalDateTime time, int stepMinutes) {
         int minute = (time.getMinute() / stepMinutes) * stepMinutes;
         return time.withMinute(minute).truncatedTo(ChronoUnit.MINUTES);
+    }
+
+    private static double roundToTwoDecimals(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
+
+    private static class HistoryBucket {
+
+        private LocalDateTime recordedAt;
+        private double temperatureSum;
+        private double humiditySum;
+        private double lightSum;
+        private int batterySum;
+        private int count;
+        private boolean signalStatus = true;
+        private boolean alarm;
+
+        private void add(TelemetryRecord record, boolean recordAlarm) {
+            recordedAt = record.getRecordedAt();
+            temperatureSum += record.getTemperature();
+            humiditySum += record.getHumidity();
+            lightSum += record.getLight();
+            batterySum += record.getBatteryLevel();
+            count++;
+            signalStatus = signalStatus && Boolean.TRUE.equals(record.getSignalStatus());
+            alarm = alarm || recordAlarm;
+        }
+
+        private TelemetryPointResponse toResponse() {
+            return TelemetryPointResponse.builder()
+                    .recordedAt(recordedAt)
+                    .temperature(roundToTwoDecimals(temperatureSum / count))
+                    .humidity(roundToTwoDecimals(humiditySum / count))
+                    .light(roundToTwoDecimals(lightSum / count))
+                    .batteryLevel(Math.round((float) batterySum / count))
+                    .signalStatus(signalStatus)
+                    .alarm(alarm)
+                    .build();
+        }
     }
 
     public record LatestSnapshot(TelemetryRecord telemetry, DeviceLocation location) {

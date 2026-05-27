@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DataInitializationService implements ApplicationRunner {
 
     private final UserAccountRepository userAccountRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.super-admin-phone:18800000000}")
     private String superAdminPhone;
@@ -22,7 +24,12 @@ public class DataInitializationService implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        dropDeprecatedThresholdTable();
         initUsers();
+    }
+
+    private void dropDeprecatedThresholdTable() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS device_threshold");
     }
 
     private void initUsers() {

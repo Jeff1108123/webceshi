@@ -20,4 +20,5 @@ public class DeviceBorrowRecordResponse {
     private LocalDateTime borrowTime;
     private LocalDateTime returnTime;
     private String status;
+    private ThresholdResponse threshold;
 }

@@ -17,5 +17,7 @@ public interface TransportDeviceRepository extends JpaRepository<TransportDevice
 
     long countByStatus(DeviceStatus status);
 
+    List<TransportDevice> findByStatusOrderByDeviceCodeAsc(DeviceStatus status);
+
     Optional<TransportDevice> findByIdAndCurrentUserId(Long id, Long userId);
 }

@@ -46,8 +46,6 @@
             </button>
           </div>
 
-          <p v-if="demoCode" class="demo-code">验证码：{{ demoCode }}</p>
-
           <button type="submit" class="primary-btn" :disabled="submitting">
             {{ submitting ? '登录中...' : '登录' }}
           </button>
@@ -75,7 +73,6 @@ export default {
       deviceStore: useDeviceStore(),
       phone: '',
       code: '',
-      demoCode: '',
       countdown: 0,
       countdownTimer: null,
       sendingCode: false,
@@ -91,8 +88,7 @@ export default {
     },
     async requestVerificationCode(checkOnly) {
       const response = await sendCode(this.phone, { checkOnly })
-      this.demoCode = response.code
-      this.code = response.code
+      window.alert(`验证码：${response.code}\n请手动输入验证码完成登录。`)
       this.startCountdown()
     },
     async handleSendCode() {
@@ -391,14 +387,6 @@ button:not(:disabled):hover {
 button:disabled {
   opacity: 0.58;
   cursor: not-allowed;
-}
-
-.demo-code {
-  margin-top: 12px;
-  color: #7dd3fc;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  opacity: 0.78;
 }
 
 @media (max-width: 860px) {

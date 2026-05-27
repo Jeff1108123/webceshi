@@ -15,7 +15,6 @@ import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
 import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
 import com.medicalcoldchain.backend.entity.DeviceBorrowRecord;
 import com.medicalcoldchain.backend.entity.DeviceLocation;
-import com.medicalcoldchain.backend.entity.DeviceThreshold;
 import com.medicalcoldchain.backend.entity.TelemetryRecord;
 import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.UserAccount;
@@ -56,7 +55,7 @@ public class DeviceService {
     @Transactional
     public DeviceOverviewResponse getOverview(UserAccount user) {
         List<TransportDevice> myDevices = transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(user.getId());
-        Map<Long, DeviceThreshold> thresholdMap = thresholdService.getThresholdMap(user, myDevices);
+        Map<Long, DeviceBorrowRecord> thresholdMap = thresholdService.getThresholdMap(user, myDevices);
 
         long alarmCount = 0;
         for (TransportDevice device : myDevices) {
@@ -202,7 +201,7 @@ public class DeviceService {
     @Transactional
     public List<LatestDeviceTelemetryResponse> getLatestTelemetry(UserAccount user) {
         List<TransportDevice> devices = transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(user.getId());
-        Map<Long, DeviceThreshold> thresholdMap = thresholdService.getThresholdMap(user, devices);
+        Map<Long, DeviceBorrowRecord> thresholdMap = thresholdService.getThresholdMap(user, devices);
 
         return devices.stream()
                 .map(device -> buildLatestTelemetryResponse(device, thresholdMap.get(device.getId())))
@@ -212,25 +211,29 @@ public class DeviceService {
     @Transactional
     public LatestDeviceTelemetryResponse getMonitorTelemetry(UserAccount user, Long deviceId) {
         TransportDevice device = getOwnedDevice(user, deviceId);
-        DeviceThreshold threshold = thresholdService.ensureThreshold(user, device);
+        DeviceBorrowRecord threshold = thresholdService.ensureThreshold(user, device);
         return buildLatestTelemetryResponse(device, threshold);
     }
 
     @Transactional
     public HistoryResponse getHistory(UserAccount user, Long deviceId, Integer hours) {
+        return getHistory(user, deviceId, hours, null);
+    }
+
+    @Transactional
+    public HistoryResponse getHistory(UserAccount user, Long deviceId, Integer hours, Integer stepMinutes) {
         int safeHours = hours == null ? 24 : Math.max(1, Math.min(hours, 24));
+        int safeStepMinutes = resolveHistoryStepMinutes(safeHours, stepMinutes);
         TransportDevice device = getOwnedDevice(user, deviceId);
-        DeviceThreshold threshold = thresholdService.ensureThreshold(user, device);
-        List<TelemetryPointResponse> points = telemetryService.getHistoryRecords(device, safeHours)
-                .stream()
-                .map(record -> telemetryService.toPointResponse(record, threshold))
-                .toList();
+        DeviceBorrowRecord threshold = thresholdService.ensureThreshold(user, device);
+        List<TelemetryPointResponse> points = telemetryService.getHistoryPoints(device, safeHours, safeStepMinutes, threshold);
 
         return HistoryResponse.builder()
                 .deviceId(device.getId())
                 .deviceCode(device.getDeviceCode())
                 .deviceName(device.getDeviceName())
                 .hours(safeHours)
+                .stepMinutes(safeStepMinutes)
                 .threshold(thresholdService.toResponse(threshold))
                 .points(points)
                 .build();
@@ -257,11 +260,11 @@ public class DeviceService {
     }
 
     private List<DeviceCardResponse> buildDeviceCards(UserAccount user, List<TransportDevice> devices) {
-        Map<Long, DeviceThreshold> thresholdMap = thresholdService.getThresholdMap(user, devices);
+        Map<Long, DeviceBorrowRecord> thresholdMap = thresholdService.getThresholdMap(user, devices);
         List<DeviceCardResponse> result = new ArrayList<>();
 
         for (TransportDevice device : devices) {
-            DeviceThreshold threshold = thresholdMap.get(device.getId());
+            DeviceBorrowRecord threshold = thresholdMap.get(device.getId());
             TelemetryService.LatestSnapshot snapshot = telemetryService.getLatestSnapshot(device);
 
             result.add(DeviceCardResponse.builder()
@@ -282,7 +285,7 @@ public class DeviceService {
         return result;
     }
 
-    private LatestDeviceTelemetryResponse buildLatestTelemetryResponse(TransportDevice device, DeviceThreshold threshold) {
+    private LatestDeviceTelemetryResponse buildLatestTelemetryResponse(TransportDevice device, DeviceBorrowRecord threshold) {
         TelemetryService.LatestSnapshot snapshot = telemetryService.getLatestSnapshot(device);
 
         return LatestDeviceTelemetryResponse.builder()
@@ -310,6 +313,7 @@ public class DeviceService {
                 .borrowTime(record.getBorrowTime())
                 .returnTime(record.getReturnTime())
                 .status(record.getReturnTime() == null ? "BORROWED" : "RETURNED")
+                .threshold(thresholdService.toResponse(record))
                 .build();
     }
 
@@ -411,6 +415,19 @@ public class DeviceService {
 
     private UserRole resolveRole(UserAccount user) {
         return user.getRole() == null ? UserRole.USER : user.getRole();
+    }
+
+    private int resolveHistoryStepMinutes(int hours, Integer stepMinutes) {
+        if (stepMinutes != null) {
+            return Math.max(1, Math.min(stepMinutes, 60));
+        }
+        if (hours <= 6) {
+            return 5;
+        }
+        if (hours <= 12) {
+            return 10;
+        }
+        return 15;
     }
 
     private TransportDevice getOwnedDevice(UserAccount user, Long deviceId) {

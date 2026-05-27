@@ -20,7 +20,6 @@
         <label>湿度下限<input v-model.number="form.humidityMin" type="number" step="0.1" /></label>
         <label>湿度上限<input v-model.number="form.humidityMax" type="number" step="0.1" /></label>
         <label>光照上限<input v-model.number="form.lightMax" type="number" step="0.1" /></label>
-        <label>失效时长<input v-model.number="form.durationLimitHours" type="number" min="1" step="1" /></label>
       </div>
     </section>
   </AppShell>
@@ -42,12 +41,11 @@ export default {
       selectedDeviceId: null,
       saving: false,
       form: {
-        tempMin: 2,
-        tempMax: 8,
-        humidityMin: 35,
-        humidityMax: 75,
-        lightMax: 10,
-        durationLimitHours: 8
+        tempMin: 20,
+        tempMax: 30,
+        humidityMin: 40,
+        humidityMax: 70,
+        lightMax: 13
       }
     }
   },
@@ -85,8 +83,7 @@ export default {
           tempMax: threshold.tempMax,
           humidityMin: threshold.humidityMin,
           humidityMax: threshold.humidityMax,
-          lightMax: threshold.lightMax,
-          durationLimitHours: threshold.durationLimitHours
+          lightMax: threshold.lightMax
         }
       } catch (error) {
         this.$message.error(error.message)

@@ -14,6 +14,7 @@ public class HistoryResponse {
     private String deviceCode;
     private String deviceName;
     private Integer hours;
+    private Integer stepMinutes;
     private ThresholdResponse threshold;
     private List<TelemetryPointResponse> points;
 }

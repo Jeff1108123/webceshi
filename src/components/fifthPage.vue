@@ -8,6 +8,7 @@
           </option>
         </select>
         <button :disabled="!selectedDeviceId" @click="loadMonitorData">刷新</button>
+        <span class="telemetry-time">{{ telemetryRecordedAt ? `上报时间：${telemetryRecordedAt}` : '暂无上报时间' }}</span>
       </div>
 
       <div v-if="!deviceStore.devices.length" class="empty-state">暂无设备，请先申请。</div>
@@ -47,6 +48,7 @@
 import AppShell from './common/AppShell.vue'
 import { fetchMonitor } from '../api/medicalColdChain'
 import { useDeviceStore } from '../store/deviceStore'
+import { formatDateTime } from '../utils/dateTime'
 
 export default {
   name: 'FifthPage',
@@ -77,6 +79,10 @@ export default {
     lightAlarm() {
       if (!this.monitorData || !this.monitorData.telemetry || !this.monitorData.threshold) return false
       return this.monitorData.telemetry.light > this.monitorData.threshold.lightMax
+    },
+    telemetryRecordedAt() {
+      const telemetry = this.monitorData && this.monitorData.telemetry
+      return telemetry && telemetry.recordedAt ? formatDateTime(telemetry.recordedAt) : ''
     }
   },
   watch: {
@@ -183,6 +189,14 @@ select {
 select:focus {
   border-color: rgba(34, 211, 238, 0.82);
   box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.14), 0 0 24px rgba(34, 211, 238, 0.2);
+}
+
+.telemetry-time {
+  padding: 10px 13px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 999px;
+  color: rgba(191, 219, 254, 0.78);
+  background: rgba(2, 6, 23, 0.32);
 }
 
 button {
