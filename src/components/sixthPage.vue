@@ -17,9 +17,9 @@
         <div class="toolbar-group toolbar-meta">
           <div class="status-copy">
             <strong>{{ dataCurrentAt ? `数据更新到：${formatDateTime(dataCurrentAt)}` : '等待加载历史数据' }}</strong>
-            <small>{{ loadedAt ? `页面刷新时间：${loadedAt} · 后端粒度：${displayGranularityMinutes}分钟/点` : '点击刷新可拉取当前时间范围内的最新历史数据' }}</small>
+            <small>{{ loadedAt ? `页面刷新时间：${loadedAt} · 后端粒度：${displayGranularityMinutes}分钟/点` : '点击刷新会写入当前时间数据并重新加载历史' }}</small>
           </div>
-          <button :disabled="!selectedDeviceId || loading" @click="loadHistory">{{ loading ? '加载中...' : '刷新到当前时间' }}</button>
+          <button :disabled="!selectedDeviceId || loading" @click="refreshToCurrentTime">{{ loading ? '加载中...' : '刷新到当前时间' }}</button>
         </div>
       </div>
 
@@ -65,7 +65,6 @@
             :metric="activeMetricConfig"
             :points="aggregatedMetricPoints"
             :granularity-minutes="displayGranularityMinutes"
-            @density-change="handleDensityChange"
           />
         </section>
 
@@ -91,7 +90,7 @@
 <script>
 import AppShell from './common/AppShell.vue'
 import SingleMetricTrendChart from './common/SingleMetricTrendChart.vue'
-import { fetchHistory } from '../api/medicalColdChain'
+import { fetchHistory, refreshHistory } from '../api/medicalColdChain'
 import { useDeviceStore } from '../store/deviceStore'
 import { formatDateTime, formatMonthDayTime } from '../utils/dateTime'
 
@@ -109,9 +108,7 @@ export default {
       historyData: null,
       loading: false,
       loadedAt: '',
-      activeMetric: 'temperature',
-      granularityOptions: [1, 2, 5, 10, 15, 30, 60],
-      manualGranularityMinutes: null
+      activeMetric: 'temperature'
     }
   },
   computed: {
@@ -179,7 +176,7 @@ export default {
       return granularityMap[this.hours] || 15
     },
     requestedGranularityMinutes() {
-      return this.manualGranularityMinutes || this.defaultGranularityMinutes
+      return this.defaultGranularityMinutes
     },
     displayGranularityMinutes() {
       const backendStepMinutes = this.historyData ? this.normalizeFiniteNumber(this.historyData.stepMinutes) : null
@@ -315,7 +312,6 @@ export default {
       this.loadHistory()
     },
     hours() {
-      this.manualGranularityMinutes = null
       if (!this.selectedDeviceId) return
       this.loadHistory()
     }
@@ -340,20 +336,6 @@ export default {
         this.activeMetric = metric
       }
     },
-    async handleDensityChange(direction) {
-      const currentIndex = this.granularityOptions.indexOf(this.displayGranularityMinutes)
-      if (currentIndex === -1) return
-
-      const offset = direction === 'denser' ? -1 : 1
-      const nextIndex = Math.max(0, Math.min(this.granularityOptions.length - 1, currentIndex + offset))
-      const nextGranularityMinutes = this.granularityOptions[nextIndex]
-      if (nextGranularityMinutes === this.requestedGranularityMinutes) return
-
-      this.manualGranularityMinutes = nextGranularityMinutes
-      if (this.selectedDeviceId) {
-        await this.loadHistory()
-      }
-    },
     normalizeFiniteNumber(value) {
       if (value === null || value === undefined || value === '') return null
       const normalizedValue = Number(value)
@@ -368,6 +350,22 @@ export default {
         if (!['temperature', 'humidity', 'light'].includes(this.activeMetric)) {
           this.activeMetric = 'temperature'
         }
+      } catch (error) {
+        this.$message.error(error.message)
+      } finally {
+        this.loading = false
+      }
+    },
+    async refreshToCurrentTime() {
+      if (!this.selectedDeviceId) return
+      this.loading = true
+      try {
+        this.historyData = await refreshHistory(this.selectedDeviceId, this.hours, this.requestedGranularityMinutes)
+        this.loadedAt = formatDateTime()
+        if (!['temperature', 'humidity', 'light'].includes(this.activeMetric)) {
+          this.activeMetric = 'temperature'
+        }
+        this.$message.success('历史数据已刷新到当前时间')
       } catch (error) {
         this.$message.error(error.message)
       } finally {

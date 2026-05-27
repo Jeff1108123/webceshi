@@ -57,6 +57,12 @@ export function fetchHistory(deviceId, hours, stepMinutes) {
   })
 }
 
+export function refreshHistory(deviceId, hours, stepMinutes) {
+  return request.post(`/devices/${deviceId}/history/refresh`, null, {
+    params: { hours, stepMinutes }
+  })
+}
+
 export function fetchLocation(deviceId) {
   return request.get(`/devices/${deviceId}/location`)
 }

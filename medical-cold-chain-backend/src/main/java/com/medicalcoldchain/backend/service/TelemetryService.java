@@ -41,6 +41,35 @@ public class TelemetryService {
     }
 
     @Transactional
+    public void refreshHistoryToCurrentTime(TransportDevice device) {
+        LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        TelemetryRecord latest = telemetryRecordRepository
+                .findTopByDeviceIdOrderByRecordedAtDescIdDesc(device.getId())
+                .orElse(null);
+
+        if (latest == null || latest.getRecordedAt() == null) {
+            saveTimeline(device, endTime.minusHours(HISTORY_WINDOW_HOURS), endTime, HISTORY_GENERATION_STEP_MINUTES);
+            return;
+        }
+
+        LocalDateTime latestMinute = latest.getRecordedAt().truncatedTo(ChronoUnit.MINUTES);
+        if (!latestMinute.isBefore(endTime)) {
+            syncDeviceSnapshot(device, latest);
+            return;
+        }
+
+        LocalDateTime windowStart = endTime.minusHours(HISTORY_WINDOW_HOURS);
+        LocalDateTime startTime = latestMinute.plusMinutes(HISTORY_GENERATION_STEP_MINUTES);
+        if (startTime.isBefore(windowStart)) {
+            startTime = windowStart;
+        }
+        if (startTime.isAfter(endTime)) {
+            startTime = endTime;
+        }
+        saveTimeline(device, startTime, endTime, HISTORY_GENERATION_STEP_MINUTES);
+    }
+
+    @Transactional
     public void clearAllDemoHistory() {
         deviceLocationRepository.deleteAllBy();
         telemetryRecordRepository.deleteAllBy();
@@ -165,33 +194,16 @@ public class TelemetryService {
         List<TelemetryRecord> telemetryRecords = new ArrayList<>();
         List<DeviceLocation> locations = new ArrayList<>();
         LocalDateTime nextTime = startTime;
+        LocalDateTime lastGeneratedAt = null;
 
         while (!nextTime.isAfter(endTime)) {
-            DeviceSimulationService.SimulatedTelemetry telemetry = deviceSimulationService
-                    .simulateTelemetry(device.getDeviceCode(), nextTime);
-            DeviceSimulationService.SimulatedLocation location = deviceSimulationService
-                    .simulateLocation(device.getDeviceCode(), device.getRouteName(), nextTime);
-
-            telemetryRecords.add(TelemetryRecord.builder()
-                    .device(device)
-                    .temperature(telemetry.temperature())
-                    .humidity(telemetry.humidity())
-                    .light(telemetry.light())
-                    .batteryLevel(telemetry.batteryLevel())
-                    .signalStatus(telemetry.signalStatus())
-                    .recordedAt(nextTime)
-                    .build());
-
-            locations.add(DeviceLocation.builder()
-                    .device(device)
-                    .longitude(location.longitude())
-                    .latitude(location.latitude())
-                    .city(location.city())
-                    .address(location.address())
-                    .recordedAt(nextTime)
-                    .build());
-
+            appendTimelinePoint(device, nextTime, telemetryRecords, locations);
+            lastGeneratedAt = nextTime;
             nextTime = nextTime.plusMinutes(stepMinutes);
+        }
+
+        if (!endTime.equals(lastGeneratedAt)) {
+            appendTimelinePoint(device, endTime, telemetryRecords, locations);
         }
 
         if (!telemetryRecords.isEmpty()) {
@@ -199,6 +211,36 @@ public class TelemetryService {
             deviceLocationRepository.saveAll(locations);
             syncDeviceSnapshot(device, telemetryRecords.get(telemetryRecords.size() - 1));
         }
+    }
+
+    private void appendTimelinePoint(
+            TransportDevice device,
+            LocalDateTime recordedAt,
+            List<TelemetryRecord> telemetryRecords,
+            List<DeviceLocation> locations) {
+        DeviceSimulationService.SimulatedTelemetry telemetry = deviceSimulationService
+                .simulateTelemetry(device.getDeviceCode(), recordedAt);
+        DeviceSimulationService.SimulatedLocation location = deviceSimulationService
+                .simulateLocation(device.getDeviceCode(), device.getRouteName(), recordedAt);
+
+        telemetryRecords.add(TelemetryRecord.builder()
+                .device(device)
+                .temperature(telemetry.temperature())
+                .humidity(telemetry.humidity())
+                .light(telemetry.light())
+                .batteryLevel(telemetry.batteryLevel())
+                .signalStatus(telemetry.signalStatus())
+                .recordedAt(recordedAt)
+                .build());
+
+        locations.add(DeviceLocation.builder()
+                .device(device)
+                .longitude(location.longitude())
+                .latitude(location.latitude())
+                .city(location.city())
+                .address(location.address())
+                .recordedAt(recordedAt)
+                .build());
     }
 
     private void syncDeviceSnapshot(TransportDevice device, TelemetryRecord latest) {

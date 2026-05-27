@@ -1,5 +1,5 @@
 <template>
-  <article class="single-metric-chart" @wheel="handleWheel">
+  <article class="single-metric-chart">
     <header class="chart-head">
       <div>
         <p class="eyebrow">历史单项趋势</p>
@@ -9,7 +9,7 @@
         <div class="granularity-pill" aria-label="当前时间密度">
           {{ granularityLabel }}
         </div>
-        <small>滚轮调整数据密度</small>
+        <small>鼠标悬停查看点位数据</small>
       </div>
     </header>
 
@@ -20,6 +20,8 @@
         preserveAspectRatio="none"
         role="img"
         :aria-label="chartAriaLabel"
+        @mousemove="handlePointerMove"
+        @mouseleave="clearHover"
       >
         <title>{{ chartTitle }}</title>
         <desc>{{ chartDescription }}</desc>
@@ -129,7 +131,37 @@
             </text>
           </g>
         </g>
+
+        <g v-if="hoveredCoordinate" class="hover-layer" aria-hidden="true">
+          <line
+            class="hover-line"
+            :x1="hoveredCoordinate.x"
+            :y1="padding.top"
+            :x2="hoveredCoordinate.x"
+            :y2="height - padding.bottom"
+          />
+          <line
+            class="hover-line hover-line-horizontal"
+            :x1="padding.left"
+            :y1="hoveredCoordinate.y"
+            :x2="width - padding.right"
+            :y2="hoveredCoordinate.y"
+          />
+          <circle class="hover-halo" :cx="hoveredCoordinate.x" :cy="hoveredCoordinate.y" r="10" :style="{ stroke: metricColor }" />
+          <circle class="hover-dot" :cx="hoveredCoordinate.x" :cy="hoveredCoordinate.y" r="5" :style="{ fill: metricColor }" />
+        </g>
       </svg>
+
+      <div v-if="hoveredCoordinate" class="hover-tooltip" :style="hoverTooltipStyle">
+        <strong>{{ hoverTitle }}</strong>
+        <span class="hover-current">{{ metricLabel }}：{{ formatValue(hoveredCoordinate.value) }}</span>
+        <dl>
+          <template v-for="detail in hoverDetails">
+            <dt :key="`${detail.key}-label`">{{ detail.label }}</dt>
+            <dd :key="`${detail.key}-value`">{{ detail.value }}</dd>
+          </template>
+        </dl>
+      </div>
     </div>
 
     <div v-else class="empty-state">暂无{{ metricLabel }}历史数据</div>
@@ -157,6 +189,7 @@ export default {
     return {
       width: 820,
       height: 360,
+      hoveredPointIndex: null,
       padding: {
         top: 34,
         right: 34,
@@ -206,6 +239,7 @@ export default {
           const value = Number(rawValue)
           return {
             sourceIndex: index,
+            source: point && typeof point === 'object' ? point : { value: point },
             value,
             label: this.resolvePointLabel(point, index)
           }
@@ -254,6 +288,61 @@ export default {
         x: this.padding.left + (this.chartWidth * index) / denominator,
         y: this.valueToY(point.value)
       }))
+    },
+    hoveredCoordinate() {
+      if (this.hoveredPointIndex === null) return null
+      return this.coordinates[this.hoveredPointIndex] || null
+    },
+    hoverTooltipStyle() {
+      const coordinate = this.hoveredCoordinate
+      if (!coordinate) return {}
+      const xPercent = (coordinate.x / this.width) * 100
+      const yPercent = (coordinate.y / this.height) * 100
+      const horizontalOffset = coordinate.x > this.width * 0.66 ? 'calc(-100% - 14px)' : '14px'
+      const verticalOffset = coordinate.y > this.height * 0.58 ? 'calc(-100% + 8px)' : '-8px'
+      return {
+        left: `${xPercent}%`,
+        top: `${yPercent}%`,
+        transform: `translate(${horizontalOffset}, ${verticalOffset})`
+      }
+    },
+    hoverTitle() {
+      const coordinate = this.hoveredCoordinate
+      if (!coordinate) return '当前点'
+      return coordinate.label || '当前点'
+    },
+    hoverDetails() {
+      const coordinate = this.hoveredCoordinate
+      if (!coordinate || !coordinate.source) return []
+      const source = coordinate.source
+      const details = [
+        { key: 'temperature', label: '温度', unit: '°C' },
+        { key: 'humidity', label: '湿度', unit: '%' },
+        { key: 'light', label: '光照', unit: 'Lux' },
+        { key: 'batteryLevel', label: '电量', unit: '%' }
+      ]
+        .filter(detail => Object.prototype.hasOwnProperty.call(source, detail.key) && source[detail.key] !== null && source[detail.key] !== undefined)
+        .map(detail => ({
+          key: detail.key,
+          label: detail.label,
+          value: this.formatDetailValue(source[detail.key], detail.unit)
+        }))
+
+      if (Object.prototype.hasOwnProperty.call(source, 'signalStatus') && source.signalStatus !== null && source.signalStatus !== undefined) {
+        details.push({
+          key: 'signalStatus',
+          label: '信号',
+          value: source.signalStatus ? '正常' : '异常'
+        })
+      }
+      if (Object.prototype.hasOwnProperty.call(source, 'alarm') && source.alarm !== null && source.alarm !== undefined) {
+        details.push({
+          key: 'alarm',
+          label: '告警',
+          value: source.alarm ? '是' : '否'
+        })
+      }
+      return details
     },
     smoothPath() {
       return this.toSmoothPath(this.coordinates)
@@ -395,9 +484,29 @@ export default {
     }
   },
   methods: {
-    handleWheel(event) {
-      event.preventDefault()
-      this.$emit('density-change', event.deltaY < 0 ? 'denser' : 'sparser')
+    handlePointerMove(event) {
+      if (!this.coordinates.length) {
+        this.hoveredPointIndex = null
+        return
+      }
+      const rect = event.currentTarget.getBoundingClientRect()
+      const pointerX = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * this.width
+      const clampedX = Math.max(this.padding.left, Math.min(this.width - this.padding.right, pointerX))
+      let nearestIndex = 0
+      let nearestDistance = Number.POSITIVE_INFINITY
+
+      this.coordinates.forEach((coordinate, index) => {
+        const distance = Math.abs(coordinate.x - clampedX)
+        if (distance < nearestDistance) {
+          nearestDistance = distance
+          nearestIndex = index
+        }
+      })
+
+      this.hoveredPointIndex = nearestIndex
+    },
+    clearHover() {
+      this.hoveredPointIndex = null
     },
     normalizeThreshold(rawValue) {
       if (rawValue === null || rawValue === undefined || rawValue === '') return null
@@ -428,6 +537,13 @@ export default {
       const absValue = Math.abs(value)
       const decimals = absValue >= 100 ? 0 : (absValue >= 10 ? 1 : 2)
       return `${Number(value).toFixed(decimals)}${this.metricUnit}`
+    },
+    formatDetailValue(value, unit) {
+      const numericValue = Number(value)
+      if (!Number.isFinite(numericValue)) return String(value)
+      const absValue = Math.abs(numericValue)
+      const decimals = absValue >= 100 ? 0 : (absValue >= 10 ? 1 : 2)
+      return `${numericValue.toFixed(decimals)}${unit}`
     },
     resolvePointLabel(point, index) {
       if (point && typeof point === 'object') {
@@ -519,6 +635,7 @@ export default {
 }
 
 .chart-shell {
+  position: relative;
   min-height: 360px;
   overflow: hidden;
   background: rgba(4, 14, 29, 0.35);
@@ -624,6 +741,89 @@ export default {
   stroke: rgba(4, 14, 29, 0.92);
   stroke-width: 4px;
   stroke-linejoin: round;
+}
+
+.hover-layer {
+  pointer-events: none;
+}
+
+.hover-line {
+  stroke: rgba(229, 246, 255, 0.45);
+  stroke-width: 1.2;
+  stroke-dasharray: 5 5;
+}
+
+.hover-line-horizontal {
+  stroke: rgba(113, 206, 255, 0.28);
+}
+
+.hover-halo {
+  fill: rgba(4, 14, 29, 0.74);
+  stroke-width: 2;
+  opacity: 0.9;
+}
+
+.hover-dot {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+}
+
+.hover-tooltip {
+  position: absolute;
+  z-index: 3;
+  min-width: 184px;
+  max-width: 230px;
+  padding: 12px 14px;
+  color: var(--text-main);
+  pointer-events: none;
+  background: rgba(6, 18, 36, 0.94);
+  border: 1px solid rgba(113, 206, 255, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.hover-tooltip strong,
+.hover-current {
+  display: block;
+}
+
+.hover-tooltip strong {
+  margin-bottom: 6px;
+  color: var(--text-strong);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.hover-current {
+  color: var(--cyan);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.hover-tooltip dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+  margin: 10px 0 0;
+}
+
+.hover-tooltip dt,
+.hover-tooltip dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hover-tooltip dt {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.hover-tooltip dd {
+  color: var(--text-main);
+  font-weight: 800;
+  text-align: right;
 }
 
 .empty-state {

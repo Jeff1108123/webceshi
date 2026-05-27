@@ -62,6 +62,25 @@ class TelemetryServiceMinuteRefreshTest {
                 .isBetween(beforeGeneration, afterGeneration);
     }
 
+    @Test
+    void refreshHistoryToCurrentTimeGeneratesTelemetryForEmptyDevice() {
+        TransportDevice device = createDevice("TEST-REFRESH-");
+
+        assertThat(telemetryService.getHistoryRecords(device, 24)).isEmpty();
+
+        LocalDateTime beforeRefresh = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        telemetryService.refreshHistoryToCurrentTime(device);
+        LocalDateTime afterRefresh = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+
+        List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 24);
+        TelemetryRecord latest = telemetryRecordRepository
+                .findTopByDeviceIdOrderByRecordedAtDescIdDesc(device.getId())
+                .orElseThrow();
+
+        assertThat(records).isNotEmpty();
+        assertThat(latest.getRecordedAt()).isBetween(beforeRefresh, afterRefresh);
+    }
+
     private TransportDevice createDevice(String codePrefix) {
         return transportDeviceRepository.save(TransportDevice.builder()
                 .deviceCode(codePrefix + System.nanoTime())

@@ -177,6 +177,16 @@ public class DeviceController {
         return ApiResponse.ok(deviceService.getHistory(user, deviceId, hours, stepMinutes));
     }
 
+    @PostMapping("/{deviceId}/history/refresh")
+    public ApiResponse<HistoryResponse> refreshHistory(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable Long deviceId,
+            @RequestParam(required = false) Integer hours,
+            @RequestParam(required = false) Integer stepMinutes) {
+        UserAccount user = authService.requireUser(authorization);
+        return ApiResponse.ok("历史数据已刷新到当前时间", deviceService.refreshHistory(user, deviceId, hours, stepMinutes));
+    }
+
     @GetMapping("/{deviceId}/location")
     public ApiResponse<DeviceLocationResponse> location(
             @RequestHeader("Authorization") String authorization,

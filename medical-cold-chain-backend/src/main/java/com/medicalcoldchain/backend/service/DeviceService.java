@@ -240,6 +240,26 @@ public class DeviceService {
     }
 
     @Transactional
+    public HistoryResponse refreshHistory(UserAccount user, Long deviceId, Integer hours, Integer stepMinutes) {
+        int safeHours = hours == null ? 24 : Math.max(1, Math.min(hours, 24));
+        int safeStepMinutes = resolveHistoryStepMinutes(safeHours, stepMinutes);
+        TransportDevice device = getOwnedDevice(user, deviceId);
+        telemetryService.refreshHistoryToCurrentTime(device);
+        DeviceBorrowRecord threshold = thresholdService.ensureThreshold(user, device);
+        List<TelemetryPointResponse> points = telemetryService.getHistoryPoints(device, safeHours, safeStepMinutes, threshold);
+
+        return HistoryResponse.builder()
+                .deviceId(device.getId())
+                .deviceCode(device.getDeviceCode())
+                .deviceName(device.getDeviceName())
+                .hours(safeHours)
+                .stepMinutes(safeStepMinutes)
+                .threshold(thresholdService.toResponse(threshold))
+                .points(points)
+                .build();
+    }
+
+    @Transactional
     public DeviceLocationResponse getLatestLocation(UserAccount user, Long deviceId) {
         TransportDevice device = getOwnedDevice(user, deviceId);
         DeviceLocation location = telemetryService.getLatestSnapshot(device).location();
