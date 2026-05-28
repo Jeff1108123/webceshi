@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { getToken, clearSession, sanitizeSession } from '../utils/session'
 
-const apiBaseUrl = process.env.VUE_APP_API_BASE_URL || 'http://127.0.0.1:8080/api'
+const apiBaseUrl = process.env.VUE_APP_API_BASE_URL || '/api'
 
 const request = axios.create({
   baseURL: apiBaseUrl,
@@ -36,7 +36,7 @@ request.interceptors.response.use(
   error => {
     if (error.response && error.response.status === 431) {
       clearSession()
-      return Promise.reject(new Error('请求头过大，已清理旧登录信息。请刷新页面后重试，并使用 http://127.0.0.1:8081 访问前端。'))
+      return Promise.reject(new Error('请求头过大，已清理旧登录信息。请刷新页面后重试，并使用 http://当前电脑IPv4:8081 访问前端。'))
     }
 
     const message = error.response && error.response.data && error.response.data.message
