@@ -405,17 +405,18 @@ class MedicalColdChainBackendApplicationTests {
                 .recordedAt(manualRecordedAt)
                 .build());
 
+        long beforeLatestQueryCount = telemetryRecordRepository.count();
         LatestDeviceTelemetryResponse latest = deviceService.getLatestTelemetry(dispatcher).get(0);
-        assertEquals(manualRecordedAt, latest.getTelemetry().getRecordedAt());
-        assertEquals(2.34, latest.getTelemetry().getTemperature());
-        assertEquals(66.7, latest.getTelemetry().getHumidity());
-        assertEquals(12.5, latest.getTelemetry().getLight());
-        assertEquals(88, latest.getTelemetry().getBatteryLevel());
-        assertFalse(latest.getTelemetry().getSignalStatus());
+        long afterLatestQueryCount = telemetryRecordRepository.count();
+        assertEquals(beforeLatestQueryCount + 1, afterLatestQueryCount);
+        assertNotNull(latest.getTelemetry().getRecordedAt());
+        assertFalse(manualRecordedAt.equals(latest.getTelemetry().getRecordedAt()));
 
+        long beforeMonitorQueryCount = telemetryRecordRepository.count();
         LatestDeviceTelemetryResponse monitor = deviceService.getMonitorTelemetry(dispatcher, deviceId);
-        assertEquals(manualRecordedAt, monitor.getTelemetry().getRecordedAt());
-        assertEquals(2.34, monitor.getTelemetry().getTemperature());
+        long afterMonitorQueryCount = telemetryRecordRepository.count();
+        assertEquals(beforeMonitorQueryCount + 1, afterMonitorQueryCount);
+        assertNotNull(monitor.getTelemetry().getRecordedAt());
 
         HistoryResponse history = deviceService.getHistory(dispatcher, deviceId, 1, 1);
         assertTrue(history.getPoints().stream().anyMatch(point -> manualRecordedAt.equals(point.getRecordedAt())

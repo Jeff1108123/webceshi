@@ -76,6 +76,37 @@ public class TelemetryService {
     }
 
     @Transactional
+    public LatestSnapshot recordRealtimeSnapshot(TransportDevice device) {
+        LocalDateTime recordedAt = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        DeviceSimulationService.SimulatedTelemetry telemetry = deviceSimulationService
+                .simulateTelemetry(device.getDeviceCode(), recordedAt);
+        DeviceSimulationService.SimulatedLocation location = deviceSimulationService
+                .simulateLocation(device.getDeviceCode(), device.getRouteName(), recordedAt);
+
+        TelemetryRecord savedTelemetry = telemetryRecordRepository.save(TelemetryRecord.builder()
+                .device(device)
+                .temperature(telemetry.temperature())
+                .humidity(telemetry.humidity())
+                .light(telemetry.light())
+                .batteryLevel(telemetry.batteryLevel())
+                .signalStatus(telemetry.signalStatus())
+                .recordedAt(recordedAt)
+                .build());
+
+        DeviceLocation savedLocation = deviceLocationRepository.save(DeviceLocation.builder()
+                .device(device)
+                .longitude(location.longitude())
+                .latitude(location.latitude())
+                .city(location.city())
+                .address(location.address())
+                .recordedAt(recordedAt)
+                .build());
+
+        syncDeviceSnapshot(device, savedTelemetry);
+        return new LatestSnapshot(savedTelemetry, savedLocation);
+    }
+
+    @Transactional
     public LatestSnapshot getLatestSnapshot(TransportDevice device) {
         TelemetryRecord telemetry = telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDescIdDesc(device.getId()).orElse(null);
         DeviceLocation location = deviceLocationRepository.findTopByDeviceIdOrderByRecordedAtDesc(device.getId()).orElse(null);

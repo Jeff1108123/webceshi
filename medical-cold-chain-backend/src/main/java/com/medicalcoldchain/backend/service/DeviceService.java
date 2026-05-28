@@ -306,7 +306,7 @@ public class DeviceService {
     }
 
     private LatestDeviceTelemetryResponse buildLatestTelemetryResponse(TransportDevice device, DeviceBorrowRecord threshold) {
-        TelemetryService.LatestSnapshot snapshot = telemetryService.getLatestSnapshot(device);
+        TelemetryService.LatestSnapshot snapshot = telemetryService.recordRealtimeSnapshot(device);
 
         return LatestDeviceTelemetryResponse.builder()
                 .deviceId(device.getId())
