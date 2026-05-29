@@ -46,7 +46,7 @@ public class DeviceBorrowRecord extends AbstractAuditableEntity {
     @JoinColumn(name = "borrower_id", nullable = false)
     private UserAccount borrower;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "DATETIME(6)")
     private LocalDateTime borrowTime;
 
     @Column(nullable = false, columnDefinition = "double default 20")
@@ -69,7 +69,7 @@ public class DeviceBorrowRecord extends AbstractAuditableEntity {
     @Builder.Default
     private Double lightMax = DEFAULT_LIGHT_MAX;
 
-    @Column
+    @Column(columnDefinition = "DATETIME(6)")
     private LocalDateTime returnTime;
 
     @PrePersist

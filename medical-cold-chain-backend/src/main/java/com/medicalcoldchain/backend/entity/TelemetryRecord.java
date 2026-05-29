@@ -52,6 +52,6 @@ public class TelemetryRecord {
     @Column(nullable = false)
     private Boolean signalStatus;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "DATETIME(6)")
     private LocalDateTime recordedAt;
 }

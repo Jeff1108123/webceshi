@@ -53,7 +53,7 @@ public class TransportDevice extends AbstractAuditableEntity {
     @JoinColumn(name = "current_user_id")
     private UserAccount currentUser;
 
-    @Column
+    @Column(columnDefinition = "DATETIME(6)")
     private LocalDateTime borrowedAt;
 
     @Column(nullable = false)

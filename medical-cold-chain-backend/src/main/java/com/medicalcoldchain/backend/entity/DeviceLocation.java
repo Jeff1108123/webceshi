@@ -49,6 +49,6 @@ public class DeviceLocation {
     @Column(nullable = false, length = 200)
     private String address;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "DATETIME(6)")
     private LocalDateTime recordedAt;
 }

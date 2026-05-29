@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS transport_device (
   route_name VARCHAR(100) NOT NULL,
   status VARCHAR(20) NOT NULL,
   current_user_id BIGINT NULL,
-  borrowed_at DATETIME NULL,
+  borrowed_at DATETIME(6) NULL,
   battery_level INT NOT NULL,
   signal_status BIT NOT NULL,
   created_at DATETIME NOT NULL,
@@ -54,13 +54,13 @@ CREATE TABLE IF NOT EXISTS device_borrow_record (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   device_id BIGINT NOT NULL,
   borrower_id BIGINT NOT NULL,
-  borrow_time DATETIME NOT NULL,
+  borrow_time DATETIME(6) NOT NULL,
   temp_min DOUBLE NOT NULL DEFAULT 20,
   temp_max DOUBLE NOT NULL DEFAULT 30,
   humidity_min DOUBLE NOT NULL DEFAULT 40,
   humidity_max DOUBLE NOT NULL DEFAULT 70,
   light_max DOUBLE NOT NULL DEFAULT 13,
-  return_time DATETIME NULL,
+  return_time DATETIME(6) NULL,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   CONSTRAINT fk_device_borrow_record_device
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS telemetry_record (
   light DOUBLE NOT NULL,
   battery_level INT NOT NULL,
   signal_status BIT NOT NULL,
-  recorded_at DATETIME NOT NULL,
+  recorded_at DATETIME(6) NOT NULL,
   CONSTRAINT fk_telemetry_device
     FOREIGN KEY (device_id) REFERENCES transport_device(id),
   INDEX idx_telemetry_device_time (device_id, recorded_at)
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS device_location (
   latitude DOUBLE NOT NULL,
   city VARCHAR(50) NOT NULL,
   address VARCHAR(200) NOT NULL,
-  recorded_at DATETIME NOT NULL,
+  recorded_at DATETIME(6) NOT NULL,
   CONSTRAINT fk_location_device
     FOREIGN KEY (device_id) REFERENCES transport_device(id),
   INDEX idx_location_device_time (device_id, recorded_at)
@@ -111,7 +111,22 @@ WHERE NOT EXISTS (
 );
 
 ALTER TABLE transport_device
-  ADD COLUMN IF NOT EXISTS borrowed_at DATETIME NULL;
+  ADD COLUMN IF NOT EXISTS borrowed_at DATETIME(6) NULL;
+
+ALTER TABLE transport_device
+  MODIFY COLUMN borrowed_at DATETIME(6) NULL;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN borrow_time DATETIME(6) NOT NULL;
+
+ALTER TABLE device_borrow_record
+  MODIFY COLUMN return_time DATETIME(6) NULL;
+
+ALTER TABLE telemetry_record
+  MODIFY COLUMN recorded_at DATETIME(6) NOT NULL;
+
+ALTER TABLE device_location
+  MODIFY COLUMN recorded_at DATETIME(6) NOT NULL;
 
 ALTER TABLE device_borrow_record
   ADD COLUMN IF NOT EXISTS temp_min DOUBLE NOT NULL DEFAULT 20;

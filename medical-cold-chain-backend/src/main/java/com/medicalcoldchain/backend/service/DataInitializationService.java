@@ -14,6 +14,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 
 @Component
@@ -27,6 +30,7 @@ public class DataInitializationService implements ApplicationRunner {
     private final UserAccountRepository userAccountRepository;
     private final TransportDeviceRepository transportDeviceRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final DataSource dataSource;
 
     @Value("${app.super-admin-phone:18800000000}")
     private String superAdminPhone;
@@ -35,12 +39,33 @@ public class DataInitializationService implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         dropDeprecatedThresholdTable();
+        normalizeDateTimePrecision();
         initUsers();
         initDevices();
     }
 
     private void dropDeprecatedThresholdTable() {
         jdbcTemplate.execute("DROP TABLE IF EXISTS device_threshold");
+    }
+
+    private void normalizeDateTimePrecision() {
+        String databaseProductName = getDatabaseProductName().toLowerCase();
+        if (!databaseProductName.contains("mysql") && !databaseProductName.contains("mariadb")) {
+            return;
+        }
+        jdbcTemplate.execute("ALTER TABLE transport_device MODIFY COLUMN borrowed_at DATETIME(6) NULL");
+        jdbcTemplate.execute("ALTER TABLE device_borrow_record MODIFY COLUMN borrow_time DATETIME(6) NOT NULL");
+        jdbcTemplate.execute("ALTER TABLE device_borrow_record MODIFY COLUMN return_time DATETIME(6) NULL");
+        jdbcTemplate.execute("ALTER TABLE telemetry_record MODIFY COLUMN recorded_at DATETIME(6) NOT NULL");
+        jdbcTemplate.execute("ALTER TABLE device_location MODIFY COLUMN recorded_at DATETIME(6) NOT NULL");
+    }
+
+    private String getDatabaseProductName() {
+        try (Connection connection = dataSource.getConnection()) {
+            return connection.getMetaData().getDatabaseProductName();
+        } catch (SQLException exception) {
+            return "";
+        }
     }
 
     private void initUsers() {
