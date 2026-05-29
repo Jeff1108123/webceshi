@@ -30,21 +30,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
 public class DeviceService {
-
-    private static final DateTimeFormatter DEVICE_CODE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-    private static final List<String> MEDICINE_NAMES = List.of("疫苗冷藏箱", "血液运输箱", "生物制剂运输箱", "试剂冷链箱");
-    private static final List<String> ROUTE_NAMES = List.of("北京医院专线", "上海疾控专线", "广州仓储专线", "成都配送专线");
 
     private final TransportDeviceRepository transportDeviceRepository;
     private final DeviceBorrowRecordRepository deviceBorrowRecordRepository;
@@ -66,8 +60,10 @@ public class DeviceService {
             }
         }
 
+        int remainingBorrowLimit = Math.max(borrowLimitService.getEffectiveLimit(user) - myDevices.size(), 0);
+
         return DeviceOverviewResponse.builder()
-                .availableCount(Math.max(borrowLimitService.getEffectiveLimit(user) - myDevices.size(), 0))
+                .availableCount((int) Math.min(remainingBorrowLimit, transportDeviceRepository.countByStatus(DeviceStatus.AVAILABLE)))
                 .inUseCount(transportDeviceRepository.countByStatus(DeviceStatus.IN_USE))
                 .myDeviceCount(myDevices.size())
                 .alarmCount(alarmCount)
@@ -129,13 +125,19 @@ public class DeviceService {
     public List<DeviceCardResponse> applyDevices(UserAccount user, ApplyDeviceRequest request) {
         int count = request.getCount();
         borrowLimitService.validateCanApply(user, count);
-        LocalDateTime borrowTime = LocalDateTime.now();
-        List<TransportDevice> createdDevices = new ArrayList<>();
+        List<TransportDevice> availableDevices = transportDeviceRepository.findByStatusOrderByDeviceCodeAsc(DeviceStatus.AVAILABLE);
+        if (availableDevices.size() < count) {
+            throw new BusinessException("当前空闲设备不足，最多还能申请 " + availableDevices.size() + " 台");
+        }
+
+        LocalDateTime borrowTime = LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        List<TransportDevice> borrowedDevices = new ArrayList<>(availableDevices.subList(0, count));
         List<DeviceBorrowRecord> records = new ArrayList<>();
 
-        for (int index = 0; index < count; index++) {
-            TransportDevice device = createBorrowedDevice(user, borrowTime, index);
-            createdDevices.add(device);
+        for (TransportDevice device : borrowedDevices) {
+            device.setStatus(DeviceStatus.IN_USE);
+            device.setCurrentUser(user);
+            device.setBorrowedAt(borrowTime);
             records.add(DeviceBorrowRecord.builder()
                     .device(device)
                     .borrower(user)
@@ -143,9 +145,10 @@ public class DeviceService {
                     .build());
         }
 
+        transportDeviceRepository.saveAll(borrowedDevices);
         deviceBorrowRecordRepository.saveAll(records);
 
-        for (TransportDevice device : createdDevices) {
+        for (TransportDevice device : borrowedDevices) {
             thresholdService.ensureThreshold(user, device);
             telemetryService.generateBorrowHistory(device, borrowTime);
         }
@@ -422,35 +425,6 @@ public class DeviceService {
             telemetryService.resetTelemetryRecordAutoIncrementIfEmpty();
         }
         return targetDevices.size();
-    }
-
-    private TransportDevice createBorrowedDevice(UserAccount user, LocalDateTime borrowTime, int index) {
-        int templateIndex = Math.floorMod(index, MEDICINE_NAMES.size());
-        String deviceCode = generateDeviceCode();
-        String deviceName = "冷链设备-" + deviceCode.substring(deviceCode.length() - 6);
-
-        return transportDeviceRepository.save(TransportDevice.builder()
-                .deviceCode(deviceCode)
-                .deviceName(deviceName)
-                .medicineName(MEDICINE_NAMES.get(templateIndex))
-                .routeName(ROUTE_NAMES.get(templateIndex))
-                .status(DeviceStatus.IN_USE)
-                .currentUser(user)
-                .borrowedAt(borrowTime)
-                .batteryLevel(100)
-                .signalStatus(true)
-                .build());
-    }
-
-    private String generateDeviceCode() {
-        for (int attempt = 0; attempt < 10; attempt++) {
-            String candidate = "MCC" + DEVICE_CODE_TIME_FORMAT.format(LocalDateTime.now())
-                    + String.format("%03d", ThreadLocalRandom.current().nextInt(1000));
-            if (transportDeviceRepository.findByDeviceCode(candidate).isEmpty()) {
-                return candidate;
-            }
-        }
-        throw new BusinessException("设备编码生成失败，请稍后重试");
     }
 
     private boolean isBorrowedDevice(TransportDevice device) {

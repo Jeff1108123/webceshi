@@ -19,6 +19,7 @@ import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
 import com.medicalcoldchain.backend.entity.TelemetryRecord;
 import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.UserAccount;
+import com.medicalcoldchain.backend.enums.DeviceStatus;
 import com.medicalcoldchain.backend.enums.UserRole;
 import com.medicalcoldchain.backend.exception.BusinessException;
 import com.medicalcoldchain.backend.repository.DeviceBorrowRecordRepository;
@@ -715,6 +716,43 @@ class MedicalColdChainBackendApplicationTests {
         assertEquals("该用户仍有在用设备，请先强制归还后再删除", exception.getMessage());
         assertTrue(userAccountRepository.existsById(dispatcher.getId()));
         assertEquals(1, transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(dispatcher.getId()).size());
+    }
+
+    @Test
+    void applyDevicesShouldBorrowExistingInventoryWithoutCreatingNewDeviceRows() {
+        UserAccount dispatcher = createBorrowLimitTestUser("113", "固定库存借用测试调度员");
+        forceReturnAllInUseDevices();
+        long deviceCountBeforeApply = transportDeviceRepository.count();
+        long availableCountBeforeApply = transportDeviceRepository.countByStatus(DeviceStatus.AVAILABLE);
+
+        deviceService.applyDevices(dispatcher, applyRequest(2));
+
+        assertEquals(deviceCountBeforeApply, transportDeviceRepository.count());
+        assertEquals(availableCountBeforeApply - 2, transportDeviceRepository.countByStatus(DeviceStatus.AVAILABLE));
+        assertEquals(2, transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(dispatcher.getId()).size());
+    }
+
+    @Test
+    void generatedBorrowHistoryShouldNotStartBeforeBorrowTime() {
+        UserAccount dispatcher = createBorrowLimitTestUser("112", "借用后历史测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        TransportDevice device = transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(dispatcher.getId()).get(0);
+
+        TelemetryRecord firstRecord = telemetryRecordRepository.findAll().stream()
+                .filter(record -> device.getId().equals(record.getDevice().getId()))
+                .min((first, second) -> first.getRecordedAt().compareTo(second.getRecordedAt()))
+                .orElseThrow();
+
+        assertFalse(firstRecord.getRecordedAt().isBefore(device.getBorrowedAt()));
+    }
+
+    @Test
+    void simulatedLocationShouldUseSanmingAddresses() {
+        DeviceSimulationService.SimulatedLocation location = deviceSimulationService
+                .simulateLocation("MCC-SANMING-001", "三明测试线路", LocalDateTime.of(2026, 5, 21, 9, 30));
+
+        assertEquals("三明", location.city());
+        assertTrue(location.address().contains("三明"));
     }
 
     private double roundToTwoDecimals(double value) {

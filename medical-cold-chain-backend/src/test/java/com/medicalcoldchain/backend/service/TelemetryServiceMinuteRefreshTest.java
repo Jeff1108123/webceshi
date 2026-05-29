@@ -49,10 +49,10 @@ class TelemetryServiceMinuteRefreshTest {
                 .recordedAt(oldRecordedAt)
                 .build());
 
-        LocalDateTime beforeGeneration = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime beforeGeneration = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
         telemetryService.generateBorrowHistory(device, LocalDateTime.now());
         List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 72);
-        LocalDateTime afterGeneration = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime afterGeneration = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
 
         assertThat(records).isNotEmpty();
         assertThat(records)
@@ -68,9 +68,9 @@ class TelemetryServiceMinuteRefreshTest {
 
         assertThat(telemetryService.getHistoryRecords(device, 24)).isEmpty();
 
-        LocalDateTime beforeRefresh = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime beforeRefresh = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
         telemetryService.refreshHistoryToCurrentTime(device);
-        LocalDateTime afterRefresh = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime afterRefresh = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
 
         List<TelemetryRecord> records = telemetryService.getHistoryRecords(device, 24);
         TelemetryRecord latest = telemetryRecordRepository

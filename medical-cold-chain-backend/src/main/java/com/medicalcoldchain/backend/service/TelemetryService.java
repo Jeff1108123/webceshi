@@ -40,8 +40,11 @@ public class TelemetryService {
 
     @Transactional
     public void generateBorrowHistory(TransportDevice device, LocalDateTime borrowTime) {
-        LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-        LocalDateTime startTime = endTime.minusHours(HISTORY_WINDOW_HOURS);
+        LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        LocalDateTime startTime = getBorrowStartMinute(device, borrowTime);
+        if (startTime.isAfter(endTime)) {
+            endTime = startTime;
+        }
         telemetryRecordRepository.deleteByDeviceIdAndRecordedAtGreaterThanEqual(device.getId(), startTime);
         deviceLocationRepository.deleteByDeviceIdAndRecordedAtGreaterThanEqual(device.getId(), startTime);
         saveTimeline(device, startTime, endTime, HISTORY_GENERATION_STEP_MINUTES);
@@ -49,13 +52,17 @@ public class TelemetryService {
 
     @Transactional
     public void refreshHistoryToCurrentTime(TransportDevice device) {
-        LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        LocalDateTime endTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        LocalDateTime borrowStart = getBorrowStartMinute(device, endTime);
+        if (borrowStart.isAfter(endTime)) {
+            endTime = borrowStart;
+        }
         TelemetryRecord latest = telemetryRecordRepository
                 .findTopByDeviceIdOrderByRecordedAtDescIdDesc(device.getId())
                 .orElse(null);
 
         if (latest == null || latest.getRecordedAt() == null) {
-            saveTimeline(device, endTime.minusHours(HISTORY_WINDOW_HOURS), endTime, HISTORY_GENERATION_STEP_MINUTES);
+            saveTimeline(device, borrowStart, endTime, HISTORY_GENERATION_STEP_MINUTES);
             return;
         }
 
@@ -69,6 +76,9 @@ public class TelemetryService {
         LocalDateTime startTime = latestMinute.plusMinutes(HISTORY_GENERATION_STEP_MINUTES);
         if (startTime.isBefore(windowStart)) {
             startTime = windowStart;
+        }
+        if (startTime.isBefore(borrowStart)) {
+            startTime = borrowStart;
         }
         if (startTime.isAfter(endTime)) {
             startTime = endTime;
@@ -281,6 +291,14 @@ public class TelemetryService {
                 .build();
     }
 
+    private LocalDateTime getBorrowStartMinute(TransportDevice device, LocalDateTime fallback) {
+        LocalDateTime borrowedAt = device.getBorrowedAt() == null ? fallback : device.getBorrowedAt();
+        if (borrowedAt == null) {
+            return LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
+        }
+        return borrowedAt.truncatedTo(ChronoUnit.MILLIS);
+    }
+
     private void saveTimeline(TransportDevice device, LocalDateTime startTime, LocalDateTime endTime, int stepMinutes) {
         List<TelemetryRecord> telemetryRecords = new ArrayList<>();
         List<DeviceLocation> locations = new ArrayList<>();
@@ -293,7 +311,7 @@ public class TelemetryService {
             nextTime = nextTime.plusMinutes(stepMinutes);
         }
 
-        if (!endTime.equals(lastGeneratedAt)) {
+        if (lastGeneratedAt != null && endTime.truncatedTo(ChronoUnit.MINUTES).isAfter(lastGeneratedAt.truncatedTo(ChronoUnit.MINUTES))) {
             appendTimelinePoint(device, endTime, telemetryRecords, locations);
         }
 

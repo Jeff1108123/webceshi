@@ -1,7 +1,10 @@
 package com.medicalcoldchain.backend.service;
 
+import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.UserAccount;
+import com.medicalcoldchain.backend.enums.DeviceStatus;
 import com.medicalcoldchain.backend.enums.UserRole;
+import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import com.medicalcoldchain.backend.repository.UserAccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,11 +14,18 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
 public class DataInitializationService implements ApplicationRunner {
 
+    private static final int INITIAL_DEVICE_COUNT = 60;
+    private static final List<String> MEDICINE_NAMES = List.of("疫苗冷藏箱", "血液运输箱", "生物制剂运输箱", "试剂冷链箱");
+    private static final List<String> ROUTE_NAMES = List.of("三明市第一医院专线", "三明市中西医结合医院专线", "沙县区总医院专线", "永安市立医院专线");
+
     private final UserAccountRepository userAccountRepository;
+    private final TransportDeviceRepository transportDeviceRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.super-admin-phone:18800000000}")
@@ -26,6 +36,7 @@ public class DataInitializationService implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         dropDeprecatedThresholdTable();
         initUsers();
+        initDevices();
     }
 
     private void dropDeprecatedThresholdTable() {
@@ -84,5 +95,23 @@ public class DataInitializationService implements ApplicationRunner {
             }
             userAccountRepository.save(user);
         });
+    }
+
+    private void initDevices() {
+        for (int index = 1; index <= INITIAL_DEVICE_COUNT; index++) {
+            int deviceNumber = index;
+            String deviceCode = String.format("MCC-%03d", deviceNumber);
+            int templateIndex = Math.floorMod(deviceNumber - 1, MEDICINE_NAMES.size());
+            transportDeviceRepository.findByDeviceCode(deviceCode)
+                    .orElseGet(() -> transportDeviceRepository.save(TransportDevice.builder()
+                            .deviceCode(deviceCode)
+                            .deviceName("冷链设备-" + String.format("%03d", deviceNumber))
+                            .medicineName(MEDICINE_NAMES.get(templateIndex))
+                            .routeName(ROUTE_NAMES.get(templateIndex))
+                            .status(DeviceStatus.AVAILABLE)
+                            .batteryLevel(100)
+                            .signalStatus(true)
+                            .build()));
+        }
     }
 }

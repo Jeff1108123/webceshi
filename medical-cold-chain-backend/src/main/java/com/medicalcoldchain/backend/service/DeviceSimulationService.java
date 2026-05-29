@@ -12,11 +12,11 @@ public class DeviceSimulationService {
     private static final LocalDateTime BASE_TIME = LocalDateTime.of(2026, 1, 1, 0, 0);
 
     private static final List<RoutePoint> ROUTE_POINTS = List.of(
-            new RoutePoint(121.4666, 31.2284, "上海", "上海市静安区医药冷链中心"),
-            new RoutePoint(121.4728, 31.2085, "上海", "上海交通大学医学院附属瑞金医院"),
-            new RoutePoint(121.4382, 31.1724, "上海", "上海市第六人民医院冷链交接点"),
-            new RoutePoint(121.4103, 31.1968, "上海", "徐汇区疫苗转运中继站"),
-            new RoutePoint(121.4428, 31.2217, "上海", "黄浦区生物样本配送枢纽")
+            new RoutePoint(117.6350, 26.2654, "三明", "福建省三明市三元区三明市第一医院"),
+            new RoutePoint(117.6389, 26.2636, "三明", "福建省三明市三元区三明市中西医结合医院"),
+            new RoutePoint(117.7892, 26.3975, "三明", "福建省三明市沙县区总医院"),
+            new RoutePoint(117.3651, 25.9740, "三明", "福建省三明市永安市立医院"),
+            new RoutePoint(117.2024, 26.3556, "三明", "福建省三明市明溪县总医院")
     );
 
     public SimulatedTelemetry simulateTelemetry(String deviceCode, LocalDateTime recordedAt) {
@@ -67,7 +67,7 @@ public class DeviceSimulationService {
     public SimulatedLocation simulateLocation(String deviceCode, String routeName, LocalDateTime recordedAt) {
         long minutes = Duration.between(BASE_TIME, recordedAt).toMinutes();
         int seed = Math.abs(deviceCode.hashCode());
-        double progress = ((minutes / 18.0) + seed % 120) / 10.0;
+        double progress = ((minutes / 60.0) + seed % 120) / 10.0;
 
         int currentIndex = ((int) Math.floor(progress)) % ROUTE_POINTS.size();
         double ratio = progress - Math.floor(progress);
