@@ -7,8 +7,8 @@ export function sendCode(phone, options = {}) {
   })
 }
 
-export function login(phone, code) {
-  return request.post('/auth/login', { phone, code })
+export function login(phone, code, options = {}) {
+  return request.post('/auth/login', { phone, code, ...options })
 }
 
 export function fetchOverview() {

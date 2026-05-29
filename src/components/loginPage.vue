@@ -125,7 +125,8 @@ export default {
         }
       }, 1000)
     },
-    async handleLogin() {
+    async handleLogin(forceLogin = false) {
+      const confirmedForceLogin = forceLogin === true
       if (!this.validatePhone()) {
         this.$message.error('请输入正确的手机号')
         return
@@ -137,12 +138,19 @@ export default {
 
       this.submitting = true
       try {
-        const result = await login(this.phone, this.code)
+        const result = await login(this.phone, this.code, { forceLogin: confirmedForceLogin })
         this.authStore.setSession(result)
         await this.deviceStore.refreshAll()
         this.$message.success('登录成功')
         this.$router.push(getDefaultHomePath(result.user))
       } catch (error) {
+        if (!confirmedForceLogin && error.message === '该账号已在其他地方登录，是否踢下线并继续登录？') {
+          const confirmed = window.confirm(error.message)
+          if (confirmed) {
+            await this.handleLogin(true)
+          }
+          return
+        }
         this.$message.error(error.message)
       } finally {
         this.submitting = false

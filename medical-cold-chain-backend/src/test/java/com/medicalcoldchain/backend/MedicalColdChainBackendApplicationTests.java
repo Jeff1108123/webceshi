@@ -5,6 +5,8 @@ import com.medicalcoldchain.backend.dto.admin.AdminUserSummaryResponse;
 import com.medicalcoldchain.backend.dto.admin.BorrowLimitOverviewResponse;
 import com.medicalcoldchain.backend.dto.admin.BorrowLimitRequest;
 import com.medicalcoldchain.backend.dto.admin.UserBorrowLimitRequest;
+import com.medicalcoldchain.backend.dto.auth.LoginRequest;
+import com.medicalcoldchain.backend.dto.auth.LoginResponse;
 import com.medicalcoldchain.backend.dto.auth.SendCodeRequest;
 import com.medicalcoldchain.backend.dto.auth.SendCodeResponse;
 import com.medicalcoldchain.backend.dto.device.ApplyDeviceRequest;
@@ -94,6 +96,34 @@ class MedicalColdChainBackendApplicationTests {
         assertNotNull(response.getCode());
         assertTrue(response.getCode().matches("\\d{6}"));
         assertTrue(userAccountRepository.existsByPhone(phone));
+    }
+
+    @Test
+    void repeatedLoginShouldRequireKickConfirmationBeforeInvalidatingPreviousSession() {
+        String phone = "138" + String.format("%08d", System.nanoTime() % 100000000L);
+        userAccountRepository.save(UserAccount.builder()
+                .phone(phone)
+                .name("单点登录测试调度员")
+                .organization("测试调度中心")
+                .role(UserRole.USER)
+                .build());
+
+        SendCodeResponse firstCode = sendLoginCode(phone);
+        LoginResponse firstLogin = authService.login(loginRequest(phone, firstCode.getCode(), false));
+        assertNotNull(authService.requireUser("Bearer " + firstLogin.getToken()));
+
+        SendCodeResponse secondCode = sendLoginCode(phone);
+        BusinessException conflict = assertThrows(BusinessException.class,
+                () -> authService.login(loginRequest(phone, secondCode.getCode(), false)));
+        assertEquals("该账号已在其他地方登录，是否踢下线并继续登录？", conflict.getMessage());
+        assertNotNull(authService.requireUser("Bearer " + firstLogin.getToken()));
+
+        LoginResponse secondLogin = authService.login(loginRequest(phone, secondCode.getCode(), true));
+        assertNotNull(authService.requireUser("Bearer " + secondLogin.getToken()));
+
+        BusinessException expired = assertThrows(BusinessException.class,
+                () -> authService.requireUser("Bearer " + firstLogin.getToken()));
+        assertEquals("登录状态已失效，请重新登录", expired.getMessage());
     }
 
     @Test
@@ -652,6 +682,21 @@ class MedicalColdChainBackendApplicationTests {
     private ApplyDeviceRequest applyRequest(int count) {
         ApplyDeviceRequest request = new ApplyDeviceRequest();
         request.setCount(count);
+        return request;
+    }
+
+    private SendCodeResponse sendLoginCode(String phone) {
+        SendCodeRequest request = new SendCodeRequest();
+        request.setPhone(phone);
+        request.setCheckOnly(true);
+        return authService.sendCode(request);
+    }
+
+    private LoginRequest loginRequest(String phone, String code, boolean forceLogin) {
+        LoginRequest request = new LoginRequest();
+        request.setPhone(phone);
+        request.setCode(code);
+        request.setForceLogin(forceLogin);
         return request;
     }
 

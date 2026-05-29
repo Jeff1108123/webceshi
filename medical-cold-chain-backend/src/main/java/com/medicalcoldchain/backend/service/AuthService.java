@@ -35,6 +35,7 @@ public class AuthService {
     private String superAdminPhone;
 
     private final Map<String, Long> tokenStore = new ConcurrentHashMap<>();
+    private final Map<Long, String> activeTokenStore = new ConcurrentHashMap<>();
 
     @Transactional
     public SendCodeResponse sendCode(SendCodeRequest request) {
@@ -78,13 +79,22 @@ public class AuthService {
                         request.getPhone(), request.getCode(), LocalDateTime.now())
                 .orElseThrow(() -> new BusinessException("验证码错误或已过期"));
 
-        loginCode.setUsed(true);
-
         UserAccount user = userAccountRepository.findByPhone(request.getPhone())
                 .map(this::normalizeUserRole)
                 .orElseGet(() -> createUserAccount(request.getPhone()));
 
+        String currentToken = activeTokenStore.get(user.getId());
+        if (currentToken != null && tokenStore.containsKey(currentToken) && !Boolean.TRUE.equals(request.getForceLogin())) {
+            throw new BusinessException(HttpStatus.CONFLICT, "该账号已在其他地方登录，是否踢下线并继续登录？");
+        }
+
+        loginCode.setUsed(true);
+
         String token = UUID.randomUUID().toString().replace("-", "");
+        String previousToken = activeTokenStore.put(user.getId(), token);
+        if (previousToken != null) {
+            tokenStore.remove(previousToken);
+        }
         tokenStore.put(token, user.getId());
 
         return LoginResponse.builder()
@@ -104,6 +114,11 @@ public class AuthService {
         String token = extractToken(authorizationHeader);
         Long userId = tokenStore.get(token);
         if (userId == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "登录状态已失效，请重新登录");
+        }
+        String activeToken = activeTokenStore.get(userId);
+        if (!token.equals(activeToken)) {
+            tokenStore.remove(token);
             throw new BusinessException(HttpStatus.UNAUTHORIZED, "登录状态已失效，请重新登录");
         }
         return userAccountRepository.findById(userId)

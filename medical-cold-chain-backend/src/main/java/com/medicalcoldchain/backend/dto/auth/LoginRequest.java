@@ -14,4 +14,6 @@ public class LoginRequest {
     @NotBlank(message = "验证码不能为空")
     @Pattern(regexp = "^\\d{6}$", message = "验证码必须为 6 位数字")
     private String code;
+
+    private Boolean forceLogin;
 }
