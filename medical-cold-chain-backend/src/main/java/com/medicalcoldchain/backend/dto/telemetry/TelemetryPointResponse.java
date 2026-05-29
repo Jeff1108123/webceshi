@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 @Builder
 public class TelemetryPointResponse {
 
+    private Long id;
     private LocalDateTime recordedAt;
     private Double temperature;
     private Double humidity;

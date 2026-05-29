@@ -12,12 +12,15 @@ import com.medicalcoldchain.backend.dto.device.DeviceBorrowRecordResponse;
 import com.medicalcoldchain.backend.dto.device.ThresholdResponse;
 import com.medicalcoldchain.backend.dto.telemetry.HistoryResponse;
 import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
+import com.medicalcoldchain.backend.dto.telemetry.ManualTelemetryRequest;
+import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
 import com.medicalcoldchain.backend.entity.TelemetryRecord;
 import com.medicalcoldchain.backend.entity.TransportDevice;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.enums.UserRole;
 import com.medicalcoldchain.backend.exception.BusinessException;
 import com.medicalcoldchain.backend.repository.DeviceBorrowRecordRepository;
+import com.medicalcoldchain.backend.repository.DeviceLocationRepository;
 import com.medicalcoldchain.backend.repository.TelemetryRecordRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import com.medicalcoldchain.backend.repository.UserAccountRepository;
@@ -61,6 +64,9 @@ class MedicalColdChainBackendApplicationTests {
 
     @Autowired
     private DeviceBorrowRecordRepository deviceBorrowRecordRepository;
+
+    @Autowired
+    private DeviceLocationRepository deviceLocationRepository;
 
     @Autowired
     private DeviceSimulationService deviceSimulationService;
@@ -409,6 +415,8 @@ class MedicalColdChainBackendApplicationTests {
         LatestDeviceTelemetryResponse latest = deviceService.getLatestTelemetry(dispatcher).get(0);
         long afterLatestQueryCount = telemetryRecordRepository.count();
         assertEquals(beforeLatestQueryCount + 1, afterLatestQueryCount);
+        assertNotNull(latest.getTelemetry().getId());
+        assertTrue(telemetryRecordRepository.existsById(latest.getTelemetry().getId()));
         assertNotNull(latest.getTelemetry().getRecordedAt());
         assertFalse(manualRecordedAt.equals(latest.getTelemetry().getRecordedAt()));
 
@@ -416,6 +424,8 @@ class MedicalColdChainBackendApplicationTests {
         LatestDeviceTelemetryResponse monitor = deviceService.getMonitorTelemetry(dispatcher, deviceId);
         long afterMonitorQueryCount = telemetryRecordRepository.count();
         assertEquals(beforeMonitorQueryCount + 1, afterMonitorQueryCount);
+        assertNotNull(monitor.getTelemetry().getId());
+        assertTrue(telemetryRecordRepository.existsById(monitor.getTelemetry().getId()));
         assertNotNull(monitor.getTelemetry().getRecordedAt());
 
         HistoryResponse history = deviceService.getHistory(dispatcher, deviceId, 1, 1);
@@ -425,6 +435,147 @@ class MedicalColdChainBackendApplicationTests {
                 && Double.valueOf(12.5).equals(point.getLight())
                 && Integer.valueOf(88).equals(point.getBatteryLevel())
                 && Boolean.FALSE.equals(point.getSignalStatus())));
+    }
+
+    @Test
+    void adminLatestTelemetryShouldRefreshAllInUseDevices() {
+        UserAccount admin = userAccountRepository.findByPhone("18800000000").orElseThrow();
+        UserAccount firstDispatcher = createBorrowLimitTestUser("122", "管理员实时刷新测试调度员A");
+        UserAccount secondDispatcher = createBorrowLimitTestUser("121", "管理员实时刷新测试调度员B");
+        deviceService.applyDevices(firstDispatcher, applyRequest(1));
+        deviceService.applyDevices(secondDispatcher, applyRequest(1));
+
+        List<Long> activeDeviceIds = transportDeviceRepository.findByStatusOrderByDeviceCodeAsc(com.medicalcoldchain.backend.enums.DeviceStatus.IN_USE)
+                .stream()
+                .map(TransportDevice::getId)
+                .toList();
+        long beforeLatestQueryCount = telemetryRecordRepository.count();
+
+        List<LatestDeviceTelemetryResponse> latestTelemetry = deviceService.getLatestTelemetry(admin);
+
+        assertEquals(activeDeviceIds.size(), latestTelemetry.size());
+        assertEquals(beforeLatestQueryCount + activeDeviceIds.size(), telemetryRecordRepository.count());
+        assertTrue(latestTelemetry.stream().map(LatestDeviceTelemetryResponse::getDeviceId).toList().containsAll(activeDeviceIds));
+    }
+
+    @Test
+    void adminMonitorShouldRefreshAnyInUseDevice() {
+        UserAccount admin = userAccountRepository.findByPhone("18800000000").orElseThrow();
+        UserAccount dispatcher = createBorrowLimitTestUser("120", "管理员单设备实时刷新测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
+        long beforeMonitorQueryCount = telemetryRecordRepository.count();
+
+        LatestDeviceTelemetryResponse monitor = deviceService.getMonitorTelemetry(admin, deviceId);
+
+        assertEquals(deviceId, monitor.getDeviceId());
+        assertNotNull(monitor.getTelemetry());
+        assertNotNull(monitor.getLocation());
+        assertEquals(beforeMonitorQueryCount + 1, telemetryRecordRepository.count());
+    }
+
+    @Test
+    void returnDevicesShouldClearHistoryAndResetTelemetryIdWhenAllDevicesReturned() {
+        forceReturnAllInUseDevices();
+        deviceLocationRepository.deleteAllBy();
+        telemetryRecordRepository.deleteAllBy();
+        UserAccount dispatcher = createBorrowLimitTestUser("119", "归还清理历史测试调度员");
+
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
+        assertTrue(telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDescIdDesc(deviceId).isPresent());
+        assertTrue(deviceLocationRepository.findTopByDeviceIdOrderByRecordedAtDesc(deviceId).isPresent());
+
+        deviceService.returnDevices(dispatcher, null);
+
+        assertTrue(deviceService.listMyDevices(dispatcher).isEmpty());
+        assertTrue(telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDescIdDesc(deviceId).isEmpty());
+        assertTrue(deviceLocationRepository.findTopByDeviceIdOrderByRecordedAtDesc(deviceId).isEmpty());
+        assertEquals(0, telemetryRecordRepository.count());
+
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long firstTelemetryId = telemetryRecordRepository.findAll().stream()
+                .map(TelemetryRecord::getId)
+                .min(Long::compareTo)
+                .orElseThrow();
+        assertEquals(1L, firstTelemetryId);
+    }
+
+    @Test
+    void forceReturnDevicesShouldClearReturnedDeviceHistory() {
+        UserAccount admin = userAccountRepository.findByPhone("18800000000").orElseThrow();
+        UserAccount dispatcher = createBorrowLimitTestUser("118", "强制归还清理历史测试调度员");
+        deviceService.applyDevices(dispatcher, applyRequest(1));
+        Long deviceId = deviceService.listMyDevices(dispatcher).get(0).getId();
+        assertTrue(authService.isAdmin(admin));
+        assertTrue(telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDescIdDesc(deviceId).isPresent());
+
+        AdminForceReturnRequest request = new AdminForceReturnRequest();
+        request.setDeviceIds(List.of(deviceId));
+        deviceService.forceReturnDevices(request);
+
+        assertTrue(deviceService.listMyDevices(dispatcher).isEmpty());
+        assertTrue(telemetryRecordRepository.findTopByDeviceIdOrderByRecordedAtDescIdDesc(deviceId).isEmpty());
+        assertTrue(deviceLocationRepository.findTopByDeviceIdOrderByRecordedAtDesc(deviceId).isEmpty());
+    }
+
+    @Test
+    void userAndAdminShouldManuallyAddHistoryForInUseDevices() {
+        UserAccount admin = userAccountRepository.findByPhone("18800000000").orElseThrow();
+        UserAccount owner = createBorrowLimitTestUser("117", "用户补录历史测试调度员");
+        UserAccount anotherOwner = createBorrowLimitTestUser("116", "管理员补录历史测试调度员");
+        deviceService.applyDevices(owner, applyRequest(1));
+        deviceService.applyDevices(anotherOwner, applyRequest(1));
+        Long ownedDeviceId = deviceService.listMyDevices(owner).get(0).getId();
+        Long adminTargetDeviceId = deviceService.listMyDevices(anotherOwner).get(0).getId();
+
+        LocalDateTime userRecordedAt = LocalDateTime.now().plusMinutes(1).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        TelemetryPointResponse userPoint = deviceService.addManualHistory(owner, ownedDeviceId,
+                manualTelemetryRequest(userRecordedAt, 25.6, 58.2, 10.8, 86, false));
+
+        TelemetryRecord userRecord = telemetryRecordRepository.findById(userPoint.getId()).orElseThrow();
+        assertEquals(userRecordedAt, userRecord.getRecordedAt());
+        assertEquals(25.6, userRecord.getTemperature());
+        assertEquals(58.2, userRecord.getHumidity());
+        assertEquals(10.8, userRecord.getLight());
+        assertEquals(86, userRecord.getBatteryLevel());
+        assertEquals(false, userRecord.getSignalStatus());
+        assertTrue(deviceLocationRepository.findTopByDeviceIdOrderByRecordedAtDesc(ownedDeviceId).isPresent());
+
+        LocalDateTime adminRecordedAt = LocalDateTime.now().plusMinutes(2).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        TelemetryPointResponse adminPoint = deviceService.addManualHistory(admin, adminTargetDeviceId,
+                manualTelemetryRequest(adminRecordedAt, 24.2, 51.5, 9.6, 91, true));
+
+        TelemetryRecord adminRecord = telemetryRecordRepository.findById(adminPoint.getId()).orElseThrow();
+        assertEquals(adminRecordedAt, adminRecord.getRecordedAt());
+        assertEquals(24.2, adminRecord.getTemperature());
+        assertEquals(51.5, adminRecord.getHumidity());
+        assertEquals(9.6, adminRecord.getLight());
+        assertEquals(91, adminRecord.getBatteryLevel());
+        assertEquals(true, adminRecord.getSignalStatus());
+    }
+
+    @Test
+    void manualHistoryShouldRejectUnauthorizedOrReturnedDevices() {
+        UserAccount admin = userAccountRepository.findByPhone("18800000000").orElseThrow();
+        UserAccount owner = createBorrowLimitTestUser("115", "补录权限测试调度员A");
+        UserAccount anotherOwner = createBorrowLimitTestUser("114", "补录权限测试调度员B");
+        deviceService.applyDevices(owner, applyRequest(1));
+        deviceService.applyDevices(anotherOwner, applyRequest(1));
+        Long ownedDeviceId = deviceService.listMyDevices(owner).get(0).getId();
+        Long otherDeviceId = deviceService.listMyDevices(anotherOwner).get(0).getId();
+
+        BusinessException unauthorized = assertThrows(BusinessException.class,
+                () -> deviceService.addManualHistory(owner, otherDeviceId,
+                        manualTelemetryRequest(LocalDateTime.now(), 25, 55, 10, 90, true)));
+        assertEquals("设备不存在或不属于当前用户", unauthorized.getMessage());
+
+        deviceService.returnDevices(owner, null);
+
+        BusinessException returned = assertThrows(BusinessException.class,
+                () -> deviceService.addManualHistory(admin, ownedDeviceId,
+                        manualTelemetryRequest(LocalDateTime.now(), 25, 55, 10, 90, true)));
+        assertEquals("设备不存在或不属于当前用户", returned.getMessage());
     }
 
     @Test
@@ -502,5 +653,36 @@ class MedicalColdChainBackendApplicationTests {
         ApplyDeviceRequest request = new ApplyDeviceRequest();
         request.setCount(count);
         return request;
+    }
+
+    private ManualTelemetryRequest manualTelemetryRequest(
+            LocalDateTime recordedAt,
+            double temperature,
+            double humidity,
+            double light,
+            int batteryLevel,
+            boolean signalStatus) {
+        ManualTelemetryRequest request = new ManualTelemetryRequest();
+        request.setRecordedAt(recordedAt);
+        request.setTemperature(temperature);
+        request.setHumidity(humidity);
+        request.setLight(light);
+        request.setBatteryLevel(batteryLevel);
+        request.setSignalStatus(signalStatus);
+        return request;
+    }
+
+    private void forceReturnAllInUseDevices() {
+        List<Long> deviceIds = transportDeviceRepository
+                .findByStatusOrderByDeviceCodeAsc(com.medicalcoldchain.backend.enums.DeviceStatus.IN_USE)
+                .stream()
+                .map(TransportDevice::getId)
+                .toList();
+        if (deviceIds.isEmpty()) {
+            return;
+        }
+        AdminForceReturnRequest request = new AdminForceReturnRequest();
+        request.setDeviceIds(deviceIds);
+        deviceService.forceReturnDevices(request);
     }
 }

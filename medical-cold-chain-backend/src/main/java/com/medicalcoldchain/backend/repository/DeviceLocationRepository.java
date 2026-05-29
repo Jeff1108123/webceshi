@@ -12,5 +12,7 @@ public interface DeviceLocationRepository extends JpaRepository<DeviceLocation, 
 
     void deleteByDeviceIdAndRecordedAtGreaterThanEqual(Long deviceId, LocalDateTime recordedAt);
 
+    void deleteByDeviceId(Long deviceId);
+
     void deleteAllBy();
 }

@@ -12,6 +12,7 @@
         <table>
           <thead>
             <tr>
+              <th>记录ID</th>
               <th>设备</th>
               <th>上报时间</th>
               <th>温度</th>
@@ -30,6 +31,7 @@
               :class="{ alarm: item.telemetry && item.telemetry.alarm }"
               :aria-label="`${item.deviceName}状态：${item.telemetry && item.telemetry.alarm ? '告警' : '正常'}`"
             >
+              <td>{{ item.telemetry && item.telemetry.id ? item.telemetry.id : '--' }}</td>
               <td>
                 <strong>{{ item.deviceName }}</strong>
                 <span>{{ item.deviceCode }}</span>

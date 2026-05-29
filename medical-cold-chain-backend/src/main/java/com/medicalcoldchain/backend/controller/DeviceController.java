@@ -16,6 +16,8 @@ import com.medicalcoldchain.backend.dto.device.ThresholdResponse;
 import com.medicalcoldchain.backend.dto.location.DeviceLocationResponse;
 import com.medicalcoldchain.backend.dto.telemetry.HistoryResponse;
 import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
+import com.medicalcoldchain.backend.dto.telemetry.ManualTelemetryRequest;
+import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
 import com.medicalcoldchain.backend.entity.UserAccount;
 import com.medicalcoldchain.backend.service.AuthService;
 import com.medicalcoldchain.backend.service.BorrowLimitService;
@@ -185,6 +187,15 @@ public class DeviceController {
             @RequestParam(required = false) Integer stepMinutes) {
         UserAccount user = authService.requireUser(authorization);
         return ApiResponse.ok("历史数据已刷新到当前时间", deviceService.refreshHistory(user, deviceId, hours, stepMinutes));
+    }
+
+    @PostMapping("/{deviceId}/history/manual")
+    public ApiResponse<TelemetryPointResponse> addManualHistory(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable Long deviceId,
+            @Valid @RequestBody ManualTelemetryRequest request) {
+        UserAccount user = authService.requireUser(authorization);
+        return ApiResponse.ok("历史记录已添加", deviceService.addManualHistory(user, deviceId, request));
     }
 
     @GetMapping("/{deviceId}/location")

@@ -16,5 +16,7 @@ public interface TelemetryRecordRepository extends JpaRepository<TelemetryRecord
 
     void deleteByDeviceIdAndRecordedAtGreaterThanEqual(Long deviceId, LocalDateTime recordedAt);
 
+    void deleteByDeviceId(Long deviceId);
+
     void deleteAllBy();
 }

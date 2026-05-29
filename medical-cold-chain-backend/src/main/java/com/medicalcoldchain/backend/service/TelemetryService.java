@@ -1,6 +1,7 @@
 package com.medicalcoldchain.backend.service;
 
 import com.medicalcoldchain.backend.dto.location.DeviceLocationResponse;
+import com.medicalcoldchain.backend.dto.telemetry.ManualTelemetryRequest;
 import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
 import com.medicalcoldchain.backend.entity.DeviceBorrowRecord;
 import com.medicalcoldchain.backend.entity.DeviceLocation;
@@ -10,9 +11,13 @@ import com.medicalcoldchain.backend.repository.DeviceLocationRepository;
 import com.medicalcoldchain.backend.repository.TelemetryRecordRepository;
 import com.medicalcoldchain.backend.repository.TransportDeviceRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -22,7 +27,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TelemetryService {
 
-    private static final int HISTORY_GENERATION_STEP_MINUTES = 5;
+    private static final int HISTORY_GENERATION_STEP_MINUTES = 1;
     private static final int HISTORY_RESPONSE_MIN_STEP_MINUTES = 1;
     private static final int HISTORY_WINDOW_HOURS = 24;
 
@@ -30,6 +35,8 @@ public class TelemetryService {
     private final DeviceLocationRepository deviceLocationRepository;
     private final TransportDeviceRepository transportDeviceRepository;
     private final DeviceSimulationService deviceSimulationService;
+    private final JdbcTemplate jdbcTemplate;
+    private final DataSource dataSource;
 
     @Transactional
     public void generateBorrowHistory(TransportDevice device, LocalDateTime borrowTime) {
@@ -73,6 +80,58 @@ public class TelemetryService {
     public void clearAllDemoHistory() {
         deviceLocationRepository.deleteAllBy();
         telemetryRecordRepository.deleteAllBy();
+    }
+
+    @Transactional
+    public void clearDeviceHistory(TransportDevice device) {
+        deviceLocationRepository.deleteByDeviceId(device.getId());
+        telemetryRecordRepository.deleteByDeviceId(device.getId());
+    }
+
+    @Transactional
+    public void resetTelemetryRecordAutoIncrementIfEmpty() {
+        if (telemetryRecordRepository.count() > 0) {
+            return;
+        }
+        String databaseProductName = getDatabaseProductName().toLowerCase();
+        if (databaseProductName.contains("mysql") || databaseProductName.contains("mariadb")) {
+            jdbcTemplate.execute("ALTER TABLE telemetry_record AUTO_INCREMENT = 1");
+            return;
+        }
+        if (databaseProductName.contains("h2")) {
+            jdbcTemplate.execute("ALTER TABLE telemetry_record ALTER COLUMN id RESTART WITH 1");
+        }
+    }
+
+    @Transactional
+    public LatestSnapshot recordManualHistory(TransportDevice device, ManualTelemetryRequest request) {
+        LocalDateTime recordedAt = request.getRecordedAt() == null
+                ? LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS)
+                : request.getRecordedAt().truncatedTo(ChronoUnit.MILLIS);
+        DeviceSimulationService.SimulatedLocation location = deviceSimulationService
+                .simulateLocation(device.getDeviceCode(), device.getRouteName(), recordedAt);
+
+        TelemetryRecord savedTelemetry = telemetryRecordRepository.save(TelemetryRecord.builder()
+                .device(device)
+                .temperature(request.getTemperature())
+                .humidity(request.getHumidity())
+                .light(request.getLight())
+                .batteryLevel(request.getBatteryLevel())
+                .signalStatus(request.getSignalStatus())
+                .recordedAt(recordedAt)
+                .build());
+
+        DeviceLocation savedLocation = deviceLocationRepository.save(DeviceLocation.builder()
+                .device(device)
+                .longitude(location.longitude())
+                .latitude(location.latitude())
+                .city(location.city())
+                .address(location.address())
+                .recordedAt(recordedAt)
+                .build());
+
+        syncDeviceSnapshot(device, savedTelemetry);
+        return new LatestSnapshot(savedTelemetry, savedLocation);
     }
 
     @Transactional
@@ -168,6 +227,7 @@ public class TelemetryService {
             return null;
         }
         return TelemetryPointResponse.builder()
+                .id(record.getId())
                 .recordedAt(record.getRecordedAt())
                 .temperature(record.getTemperature())
                 .humidity(record.getHumidity())
@@ -283,6 +343,14 @@ public class TelemetryService {
     private LocalDateTime alignTime(LocalDateTime time, int stepMinutes) {
         int minute = (time.getMinute() / stepMinutes) * stepMinutes;
         return time.withMinute(minute).truncatedTo(ChronoUnit.MINUTES);
+    }
+
+    private String getDatabaseProductName() {
+        try (Connection connection = dataSource.getConnection()) {
+            return connection.getMetaData().getDatabaseProductName();
+        } catch (SQLException exception) {
+            return "";
+        }
     }
 
     private static double roundToTwoDecimals(double value) {

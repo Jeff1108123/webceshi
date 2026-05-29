@@ -16,6 +16,28 @@
         <button :disabled="loading" @click="loadRecords">刷新</button>
       </div>
 
+      <section v-if="manualTarget" class="manual-panel">
+        <div class="manual-copy">
+          <strong>给 {{ manualTarget.deviceName }}（{{ manualTarget.deviceCode }}）补录历史记录</strong>
+          <small>提交后会直接写入数据库 telemetry_record，用户历史页也能看到这条记录。</small>
+        </div>
+        <div class="manual-form">
+          <input v-model="manualForm.recordedAt" type="datetime-local" aria-label="上报时间" />
+          <input v-model.number="manualForm.temperature" type="number" min="-80" max="80" step="0.1" placeholder="温度°C" aria-label="温度" />
+          <input v-model.number="manualForm.humidity" type="number" min="0" max="100" step="0.1" placeholder="湿度%" aria-label="湿度" />
+          <input v-model.number="manualForm.light" type="number" min="0" step="0.1" placeholder="光照Lux" aria-label="光照" />
+          <input v-model.number="manualForm.batteryLevel" type="number" min="0" max="100" step="1" placeholder="电量%" aria-label="电量" />
+          <select v-model="manualForm.signalStatus" aria-label="信号状态">
+            <option :value="true">信号正常</option>
+            <option :value="false">信号异常</option>
+          </select>
+          <button :disabled="manualSaving || loading" @click="submitManualHistory">
+            {{ manualSaving ? '提交中...' : '提交补录' }}
+          </button>
+          <button class="secondary-action" :disabled="manualSaving" @click="closeManualForm">取消</button>
+        </div>
+      </section>
+
       <div v-if="loading" class="empty-state">加载中...</div>
       <div v-else-if="!records.length" class="empty-state">暂无借用记录。</div>
 
@@ -61,14 +83,22 @@
                 </span>
               </td>
               <td>
-                <button
-                  v-if="item.status === 'BORROWED'"
-                  class="danger-action"
-                  :disabled="loading || !item.deviceId"
-                  @click="handleForceReturn(item)"
-                >
-                  强制归还
-                </button>
+                <div v-if="item.status === 'BORROWED'" class="action-group">
+                  <button
+                    class="manual-action"
+                    :disabled="loading || manualSaving || !item.deviceId"
+                    @click="openManualForm(item)"
+                  >
+                    补录历史
+                  </button>
+                  <button
+                    class="danger-action"
+                    :disabled="loading || !item.deviceId"
+                    @click="handleForceReturn(item)"
+                  >
+                    强制归还
+                  </button>
+                </div>
                 <span v-else class="muted">--</span>
               </td>
             </tr>
@@ -81,7 +111,7 @@
 
 <script>
 import AppShell from './common/AppShell.vue'
-import { fetchAllDeviceBorrows, forceReturnDevices } from '../api/medicalColdChain'
+import { addManualHistory, fetchAllDeviceBorrows, forceReturnDevices } from '../api/medicalColdChain'
 import { formatDateTime as formatDateTimeValue } from '../utils/dateTime'
 
 function normalizeThreshold(raw = {}) {
@@ -131,6 +161,16 @@ export default {
       filters: {
         keyword: '',
         status: ''
+      },
+      manualSaving: false,
+      manualTarget: null,
+      manualForm: {
+        recordedAt: '',
+        temperature: 24,
+        humidity: 55,
+        light: 10,
+        batteryLevel: 90,
+        signalStatus: true
       }
     }
   },
@@ -155,6 +195,66 @@ export default {
         return '--'
       }
       return `${min}~${max}${unit}`
+    },
+    normalizeFiniteNumber(value) {
+      const numeric = Number(value)
+      return Number.isFinite(numeric) ? numeric : NaN
+    },
+    openManualForm(item) {
+      this.manualTarget = item
+      this.manualForm = {
+        recordedAt: '',
+        temperature: 24,
+        humidity: 55,
+        light: 10,
+        batteryLevel: 90,
+        signalStatus: true
+      }
+    },
+    closeManualForm() {
+      if (this.manualSaving) {
+        return
+      }
+      this.manualTarget = null
+    },
+    buildManualHistoryPayload() {
+      const temperature = this.normalizeFiniteNumber(this.manualForm.temperature)
+      const humidity = this.normalizeFiniteNumber(this.manualForm.humidity)
+      const light = this.normalizeFiniteNumber(this.manualForm.light)
+      const batteryLevel = this.normalizeFiniteNumber(this.manualForm.batteryLevel)
+      if (![temperature, humidity, light, batteryLevel].every(Number.isFinite)) {
+        this.$message.error('请完整填写温度、湿度、光照和电量')
+        return null
+      }
+      return {
+        recordedAt: this.manualForm.recordedAt || null,
+        temperature,
+        humidity,
+        light,
+        batteryLevel: Math.round(batteryLevel),
+        signalStatus: this.manualForm.signalStatus === true
+      }
+    },
+    async submitManualHistory() {
+      if (!this.manualTarget || !this.manualTarget.deviceId) {
+        this.$message.error('缺少设备信息，无法补录历史')
+        return
+      }
+      const payload = this.buildManualHistoryPayload()
+      if (!payload) {
+        return
+      }
+      this.manualSaving = true
+      try {
+        const saved = await addManualHistory(this.manualTarget.deviceId, payload)
+        await this.loadRecords()
+        this.manualTarget = null
+        this.$message.success(saved && saved.id ? `历史记录已添加，记录ID：${saved.id}` : '历史记录已添加')
+      } catch (error) {
+        this.$message.error(error.message)
+      } finally {
+        this.manualSaving = false
+      }
     },
     async loadRecords() {
       this.loading = true
@@ -325,6 +425,66 @@ td span {
   border-color: rgba(33, 208, 122, 0.42);
   background: rgba(33, 208, 122, 0.12);
   box-shadow: 0 0 16px rgba(33, 208, 122, 0.1);
+}
+
+.action-group {
+  display: grid;
+  gap: 8px;
+  min-width: 108px;
+}
+
+.action-group button {
+  height: 36px;
+  padding: 0 12px;
+}
+
+.manual-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 18px;
+  background: rgba(5, 15, 31, 0.46);
+}
+
+.manual-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-copy strong {
+  color: var(--text-strong);
+}
+
+.manual-copy small {
+  color: var(--text-muted);
+}
+
+.manual-form {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-form input,
+.manual-form select,
+.manual-form button {
+  width: 100%;
+  min-width: 0;
+}
+
+.manual-action {
+  color: #e0faff;
+  border-color: rgba(34, 211, 238, 0.36);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(59, 130, 246, 0.26));
+}
+
+.secondary-action {
+  color: #dbeafe;
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.72);
+  box-shadow: none;
 }
 
 .danger-action {

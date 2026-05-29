@@ -23,6 +23,27 @@
         </div>
       </div>
 
+      <section v-if="deviceStore.devices.length" class="manual-panel">
+        <div class="manual-copy">
+          <strong>手动添加历史记录</strong>
+          <small>提交后会直接写入数据库 telemetry_record，并同步出现在当前设备历史数据中。</small>
+        </div>
+        <div class="manual-form">
+          <input v-model="manualForm.recordedAt" type="datetime-local" aria-label="上报时间" />
+          <input v-model.number="manualForm.temperature" type="number" min="-80" max="80" step="0.1" placeholder="温度°C" aria-label="温度" />
+          <input v-model.number="manualForm.humidity" type="number" min="0" max="100" step="0.1" placeholder="湿度%" aria-label="湿度" />
+          <input v-model.number="manualForm.light" type="number" min="0" step="0.1" placeholder="光照Lux" aria-label="光照" />
+          <input v-model.number="manualForm.batteryLevel" type="number" min="0" max="100" step="1" placeholder="电量%" aria-label="电量" />
+          <select v-model="manualForm.signalStatus" aria-label="信号状态">
+            <option :value="true">信号正常</option>
+            <option :value="false">信号异常</option>
+          </select>
+          <button :disabled="!selectedDeviceId || manualSaving || loading" @click="submitManualHistory">
+            {{ manualSaving ? '提交中...' : '添加记录' }}
+          </button>
+        </div>
+      </section>
+
       <div v-if="!deviceStore.devices.length" class="empty-state">暂无借用中的设备，请先申请创建设备。</div>
       <div v-else-if="loading && !historyData" class="empty-state">历史数据加载中...</div>
       <div v-else-if="historyData && !hasPoints" class="empty-state">当前时间范围内暂无历史数据。</div>
@@ -90,7 +111,7 @@
 <script>
 import AppShell from './common/AppShell.vue'
 import SingleMetricTrendChart from './common/SingleMetricTrendChart.vue'
-import { fetchHistory, refreshHistory } from '../api/medicalColdChain'
+import { addManualHistory, fetchHistory, refreshHistory } from '../api/medicalColdChain'
 import { useDeviceStore } from '../store/deviceStore'
 import { formatDateTime, formatMonthDayTime } from '../utils/dateTime'
 
@@ -108,7 +129,16 @@ export default {
       historyData: null,
       loading: false,
       loadedAt: '',
-      activeMetric: 'temperature'
+      activeMetric: 'temperature',
+      manualSaving: false,
+      manualForm: {
+        recordedAt: '',
+        temperature: 24,
+        humidity: 55,
+        light: 10,
+        batteryLevel: 90,
+        signalStatus: true
+      }
     }
   },
   computed: {
@@ -341,6 +371,39 @@ export default {
       const normalizedValue = Number(value)
       return Number.isFinite(normalizedValue) ? normalizedValue : null
     },
+    buildManualHistoryPayload() {
+      const temperature = this.normalizeFiniteNumber(this.manualForm.temperature)
+      const humidity = this.normalizeFiniteNumber(this.manualForm.humidity)
+      const light = this.normalizeFiniteNumber(this.manualForm.light)
+      const batteryLevel = this.normalizeFiniteNumber(this.manualForm.batteryLevel)
+      if (![temperature, humidity, light, batteryLevel].every(Number.isFinite)) {
+        this.$message.error('请完整填写温度、湿度、光照和电量')
+        return null
+      }
+      return {
+        recordedAt: this.manualForm.recordedAt || null,
+        temperature,
+        humidity,
+        light,
+        batteryLevel: Math.round(batteryLevel),
+        signalStatus: this.manualForm.signalStatus === true
+      }
+    },
+    async submitManualHistory() {
+      if (!this.selectedDeviceId) return
+      const payload = this.buildManualHistoryPayload()
+      if (!payload) return
+      this.manualSaving = true
+      try {
+        const saved = await addManualHistory(this.selectedDeviceId, payload)
+        await this.loadHistory()
+        this.$message.success(saved && saved.id ? `历史记录已添加，记录ID：${saved.id}` : '历史记录已添加')
+      } catch (error) {
+        this.$message.error(error.message)
+      } finally {
+        this.manualSaving = false
+      }
+    },
     async loadHistory() {
       if (!this.selectedDeviceId) return
       this.loading = true
@@ -400,6 +463,7 @@ export default {
 }
 
 .toolbar,
+.manual-panel,
 .empty-state,
 .history-layout {
   position: relative;
@@ -412,6 +476,64 @@ export default {
   flex-wrap: wrap;
   gap: 14px;
   margin-bottom: 18px;
+}
+
+.manual-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.3);
+}
+
+.manual-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.manual-copy strong {
+  color: #e0f2fe;
+  font-size: 16px;
+}
+
+.manual-copy small {
+  color: rgba(191, 219, 254, 0.66);
+}
+
+.manual-form {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manual-form input,
+.manual-form select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  border-radius: 12px;
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.84);
+  outline: none;
+}
+
+.manual-form input::placeholder {
+  color: rgba(191, 219, 254, 0.48);
+}
+
+.manual-form input:focus,
+.manual-form select:focus {
+  border-color: rgba(34, 211, 238, 0.82);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.14), 0 0 24px rgba(34, 211, 238, 0.2);
+}
+
+.manual-form select option {
+  color: #dbeafe;
+  background: #071224;
 }
 
 .toolbar-group {

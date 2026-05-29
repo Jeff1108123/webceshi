@@ -8,6 +8,7 @@
           </option>
         </select>
         <button :disabled="!selectedDeviceId" @click="loadMonitorData">刷新</button>
+        <span class="telemetry-time">{{ telemetryRecordId ? `记录ID：${telemetryRecordId}` : '暂无记录ID' }}</span>
         <span class="telemetry-time">{{ telemetryRecordedAt ? `上报时间：${telemetryRecordedAt}` : '暂无上报时间' }}</span>
       </div>
 
@@ -79,6 +80,10 @@ export default {
     lightAlarm() {
       if (!this.monitorData || !this.monitorData.telemetry || !this.monitorData.threshold) return false
       return this.monitorData.telemetry.light > this.monitorData.threshold.lightMax
+    },
+    telemetryRecordId() {
+      const telemetry = this.monitorData && this.monitorData.telemetry
+      return telemetry && telemetry.id ? telemetry.id : ''
     },
     telemetryRecordedAt() {
       const telemetry = this.monitorData && this.monitorData.telemetry

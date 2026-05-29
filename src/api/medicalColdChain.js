@@ -63,6 +63,10 @@ export function refreshHistory(deviceId, hours, stepMinutes) {
   })
 }
 
+export function addManualHistory(deviceId, payload) {
+  return request.post(`/devices/${deviceId}/history/manual`, payload)
+}
+
 export function fetchLocation(deviceId) {
   return request.get(`/devices/${deviceId}/location`)
 }

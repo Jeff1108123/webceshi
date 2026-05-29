@@ -12,6 +12,7 @@ import com.medicalcoldchain.backend.dto.device.ThresholdResponse;
 import com.medicalcoldchain.backend.dto.location.DeviceLocationResponse;
 import com.medicalcoldchain.backend.dto.telemetry.HistoryResponse;
 import com.medicalcoldchain.backend.dto.telemetry.LatestDeviceTelemetryResponse;
+import com.medicalcoldchain.backend.dto.telemetry.ManualTelemetryRequest;
 import com.medicalcoldchain.backend.dto.telemetry.TelemetryPointResponse;
 import com.medicalcoldchain.backend.entity.DeviceBorrowRecord;
 import com.medicalcoldchain.backend.entity.DeviceLocation;
@@ -200,8 +201,12 @@ public class DeviceService {
 
     @Transactional
     public List<LatestDeviceTelemetryResponse> getLatestTelemetry(UserAccount user) {
-        List<TransportDevice> devices = transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(user.getId());
-        Map<Long, DeviceBorrowRecord> thresholdMap = thresholdService.getThresholdMap(user, devices);
+        List<TransportDevice> devices = isAdmin(user)
+                ? transportDeviceRepository.findByStatusOrderByDeviceCodeAsc(DeviceStatus.IN_USE)
+                : transportDeviceRepository.findByCurrentUserIdOrderByDeviceCodeAsc(user.getId());
+        Map<Long, DeviceBorrowRecord> thresholdMap = isAdmin(user)
+                ? getActiveThresholdMap(devices)
+                : thresholdService.getThresholdMap(user, devices);
 
         return devices.stream()
                 .map(device -> buildLatestTelemetryResponse(device, thresholdMap.get(device.getId())))
@@ -210,8 +215,10 @@ public class DeviceService {
 
     @Transactional
     public LatestDeviceTelemetryResponse getMonitorTelemetry(UserAccount user, Long deviceId) {
-        TransportDevice device = getOwnedDevice(user, deviceId);
-        DeviceBorrowRecord threshold = thresholdService.ensureThreshold(user, device);
+        TransportDevice device = isAdmin(user) ? getInUseDevice(deviceId) : getOwnedDevice(user, deviceId);
+        DeviceBorrowRecord threshold = isAdmin(user)
+                ? getActiveThreshold(device)
+                : thresholdService.ensureThreshold(user, device);
         return buildLatestTelemetryResponse(device, threshold);
     }
 
@@ -257,6 +264,19 @@ public class DeviceService {
                 .threshold(thresholdService.toResponse(threshold))
                 .points(points)
                 .build();
+    }
+
+    @Transactional
+    public TelemetryPointResponse addManualHistory(UserAccount user, Long deviceId, ManualTelemetryRequest request) {
+        TransportDevice device = isAdmin(user) ? getInUseDevice(deviceId) : getOwnedDevice(user, deviceId);
+        if (!isBorrowedDevice(device)) {
+            throw new BusinessException("只能给正在使用的设备添加历史记录");
+        }
+        DeviceBorrowRecord threshold = isAdmin(user)
+                ? getActiveThreshold(device)
+                : thresholdService.ensureThreshold(user, device);
+        TelemetryService.LatestSnapshot snapshot = telemetryService.recordManualHistory(device, request);
+        return telemetryService.toPointResponse(snapshot.telemetry(), threshold);
     }
 
     @Transactional
@@ -391,12 +411,16 @@ public class DeviceService {
             deviceBorrowRecordRepository
                     .findTopByDeviceIdAndReturnTimeIsNullOrderByBorrowTimeDesc(device.getId())
                     .ifPresent(record -> record.setReturnTime(returnTime));
+            telemetryService.clearDeviceHistory(device);
             device.setCurrentUser(null);
             device.setStatus(DeviceStatus.AVAILABLE);
             device.setBorrowedAt(null);
         }
 
         transportDeviceRepository.saveAll(targetDevices);
+        if (transportDeviceRepository.countByStatus(DeviceStatus.IN_USE) == 0) {
+            telemetryService.resetTelemetryRecordAutoIncrementIfEmpty();
+        }
         return targetDevices.size();
     }
 
@@ -431,6 +455,33 @@ public class DeviceService {
 
     private boolean isBorrowedDevice(TransportDevice device) {
         return device != null && device.getCurrentUser() != null && device.getStatus() == DeviceStatus.IN_USE;
+    }
+
+    private Map<Long, DeviceBorrowRecord> getActiveThresholdMap(List<TransportDevice> devices) {
+        Map<Long, DeviceBorrowRecord> thresholdMap = new HashMap<>();
+        for (TransportDevice device : devices) {
+            thresholdMap.put(device.getId(), getActiveThreshold(device));
+        }
+        return thresholdMap;
+    }
+
+    private DeviceBorrowRecord getActiveThreshold(TransportDevice device) {
+        return deviceBorrowRecordRepository
+                .findTopByDeviceIdAndReturnTimeIsNullOrderByBorrowTimeDesc(device.getId())
+                .orElseGet(() -> thresholdService.ensureThreshold(device.getCurrentUser(), device));
+    }
+
+    private TransportDevice getInUseDevice(Long deviceId) {
+        TransportDevice device = transportDeviceRepository.findById(deviceId)
+                .orElseThrow(() -> new BusinessException("设备不存在或不属于当前用户"));
+        if (!isBorrowedDevice(device)) {
+            throw new BusinessException("设备不存在或不属于当前用户");
+        }
+        return device;
+    }
+
+    private boolean isAdmin(UserAccount user) {
+        return resolveRole(user) == UserRole.ADMIN;
     }
 
     private UserRole resolveRole(UserAccount user) {
