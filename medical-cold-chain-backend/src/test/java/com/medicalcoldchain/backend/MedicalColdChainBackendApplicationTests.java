@@ -36,6 +36,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
 import java.time.LocalDateTime;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -124,6 +129,53 @@ class MedicalColdChainBackendApplicationTests {
         BusinessException expired = assertThrows(BusinessException.class,
                 () -> authService.requireUser("Bearer " + firstLogin.getToken()));
         assertEquals("登录状态已失效，请重新登录", expired.getMessage());
+    }
+
+    @Test
+    void concurrentRepeatedLoginShouldNotSilentlyInvalidateOneSuccessfulLogin() throws Exception {
+        String phone = "135" + String.format("%08d", System.nanoTime() % 100000000L);
+        userAccountRepository.save(UserAccount.builder()
+                .phone(phone)
+                .name("并发单点登录测试调度员")
+                .organization("测试调度中心")
+                .role(UserRole.USER)
+                .build());
+
+        SendCodeResponse firstCode = sendLoginCode(phone);
+        SendCodeResponse secondCode = sendLoginCode(phone);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Object> firstAttempt = executor.submit(() -> concurrentLoginAttempt(phone, firstCode.getCode(), ready, start));
+            Future<Object> secondAttempt = executor.submit(() -> concurrentLoginAttempt(phone, secondCode.getCode(), ready, start));
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+
+            Object firstResult = firstAttempt.get(5, TimeUnit.SECONDS);
+            Object secondResult = secondAttempt.get(5, TimeUnit.SECONDS);
+            List<Object> results = List.of(firstResult, secondResult);
+
+            long successCount = results.stream().filter(LoginResponse.class::isInstance).count();
+            long conflictCount = results.stream()
+                    .filter(BusinessException.class::isInstance)
+                    .map(BusinessException.class::cast)
+                    .filter(exception -> "该账号已在其他地方登录，是否踢下线并继续登录？".equals(exception.getMessage()))
+                    .count();
+
+            assertEquals(1, successCount);
+            assertEquals(1, conflictCount);
+
+            LoginResponse successfulLogin = results.stream()
+                    .filter(LoginResponse.class::isInstance)
+                    .map(LoginResponse.class::cast)
+                    .findFirst()
+                    .orElseThrow();
+            assertNotNull(authService.requireUser("Bearer " + successfulLogin.getToken()));
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -683,6 +735,18 @@ class MedicalColdChainBackendApplicationTests {
         ApplyDeviceRequest request = new ApplyDeviceRequest();
         request.setCount(count);
         return request;
+    }
+
+    private Object concurrentLoginAttempt(String phone, String code, CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("并发登录测试启动超时");
+        }
+        try {
+            return authService.login(loginRequest(phone, code, false));
+        } catch (BusinessException exception) {
+            return exception;
+        }
     }
 
     private SendCodeResponse sendLoginCode(String phone) {

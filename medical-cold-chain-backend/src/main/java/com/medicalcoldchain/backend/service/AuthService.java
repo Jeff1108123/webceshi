@@ -36,6 +36,7 @@ public class AuthService {
 
     private final Map<String, Long> tokenStore = new ConcurrentHashMap<>();
     private final Map<Long, String> activeTokenStore = new ConcurrentHashMap<>();
+    private final Object loginSessionLock = new Object();
 
     @Transactional
     public SendCodeResponse sendCode(SendCodeRequest request) {
@@ -83,30 +84,32 @@ public class AuthService {
                 .map(this::normalizeUserRole)
                 .orElseGet(() -> createUserAccount(request.getPhone()));
 
-        String currentToken = activeTokenStore.get(user.getId());
-        if (currentToken != null && tokenStore.containsKey(currentToken) && !Boolean.TRUE.equals(request.getForceLogin())) {
-            throw new BusinessException(HttpStatus.CONFLICT, "该账号已在其他地方登录，是否踢下线并继续登录？");
+        synchronized (loginSessionLock) {
+            String currentToken = activeTokenStore.get(user.getId());
+            if (currentToken != null && tokenStore.containsKey(currentToken) && !Boolean.TRUE.equals(request.getForceLogin())) {
+                throw new BusinessException(HttpStatus.CONFLICT, "该账号已在其他地方登录，是否踢下线并继续登录？");
+            }
+
+            loginCode.setUsed(true);
+
+            String token = UUID.randomUUID().toString().replace("-", "");
+            String previousToken = activeTokenStore.put(user.getId(), token);
+            if (previousToken != null) {
+                tokenStore.remove(previousToken);
+            }
+            tokenStore.put(token, user.getId());
+
+            return LoginResponse.builder()
+                    .token(token)
+                    .user(UserInfoResponse.builder()
+                            .id(user.getId())
+                            .phone(user.getPhone())
+                            .name(user.getName())
+                            .organization(user.getOrganization())
+                            .role(resolveRole(user).name())
+                            .build())
+                    .build();
         }
-
-        loginCode.setUsed(true);
-
-        String token = UUID.randomUUID().toString().replace("-", "");
-        String previousToken = activeTokenStore.put(user.getId(), token);
-        if (previousToken != null) {
-            tokenStore.remove(previousToken);
-        }
-        tokenStore.put(token, user.getId());
-
-        return LoginResponse.builder()
-                .token(token)
-                .user(UserInfoResponse.builder()
-                        .id(user.getId())
-                        .phone(user.getPhone())
-                        .name(user.getName())
-                        .organization(user.getOrganization())
-                        .role(resolveRole(user).name())
-                        .build())
-                .build();
     }
 
     @Transactional(readOnly = true)
